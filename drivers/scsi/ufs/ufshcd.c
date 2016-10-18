@@ -8378,6 +8378,7 @@ out:
 		hba->curr_dev_pwr_mode,
 		hba->uic_link_state);
 	return ret;
+		return 0;
 
 }
 EXPORT_SYMBOL(ufshcd_runtime_suspend);
@@ -8421,6 +8422,9 @@ out:
 		hba->curr_dev_pwr_mode,
 		hba->uic_link_state);
 	return ret;
+		return 0;
+
+	return ufshcd_resume(hba, UFS_RUNTIME_PM);
 }
 EXPORT_SYMBOL(ufshcd_runtime_resume);
 
