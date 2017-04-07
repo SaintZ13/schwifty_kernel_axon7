@@ -96,3 +96,22 @@ x509.genkey
 
 # Kconfig presets
 all.config
+
+# Leave out building folders
+build/
+out/
+prebuilts/
+
+# Linux Scripts
+bin/
+os/
+snippets/
+LICENSE
+README.md
+als
+build-clang
+build-kernel
+common
+flash-kernel
+merge-stable
+pi-kernel
