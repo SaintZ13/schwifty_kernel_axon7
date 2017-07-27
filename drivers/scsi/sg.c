@@ -52,7 +52,10 @@ static int sg_version_num = 30536;	/* 2 digits for each component */
 #include <linux/atomic.h>
 #include <linux/ratelimit.h>
 #include <linux/sizes.h>
+<<<<<<< HEAD
 #include <linux/cred.h> /* for sg_check_file_access() */
+=======
+>>>>>>> a5efa51a8972... scsi: sg: only check for dxfer_len greater than 256M
 
 #include "scsi.h"
 #include <scsi/scsi_dbg.h>
@@ -801,35 +804,6 @@ sg_new_write(Sg_fd *sfp, struct file *file, const char __user *buf,
 	return count;
 }
 
-static bool sg_is_valid_dxfer(sg_io_hdr_t *hp)
-{
-	switch (hp->dxfer_direction) {
-	case SG_DXFER_NONE:
-		if (hp->dxferp || hp->dxfer_len > 0)
-			return false;
-		return true;
-	case SG_DXFER_FROM_DEV:
-		/*
-		 * for SG_DXFER_FROM_DEV we always set dxfer_len to > 0. dxferp
-		 * can either be NULL or != NULL so there's no point in checking
-		 * it either. So just return true.
-		 */
-		return true;
-	case SG_DXFER_TO_DEV:
-	case SG_DXFER_TO_FROM_DEV:
-		if (!hp->dxferp || hp->dxfer_len == 0)
-			return false;
-		return true;
-	case SG_DXFER_UNKNOWN:
-		if ((!hp->dxferp && hp->dxfer_len) ||
-		    (hp->dxferp && hp->dxfer_len == 0))
-			return false;
-		return true;
-	default:
-		return false;
-	}
-}
-
 static int
 sg_common_write(Sg_fd * sfp, Sg_request * srp,
 		unsigned char *cmnd, int timeout, int blocking)
@@ -851,7 +825,10 @@ sg_common_write(Sg_fd * sfp, Sg_request * srp,
 			(int) cmnd[0], (int) hp->cmd_len));
 
 	if (hp->dxfer_len >= SZ_256M)
+<<<<<<< HEAD
 	if (!sg_is_valid_dxfer(hp))
+=======
+>>>>>>> a5efa51a8972... scsi: sg: only check for dxfer_len greater than 256M
 		return -EINVAL;
 
 	k = sg_start_req(srp, cmnd);
