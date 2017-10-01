@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Copyright (C) 2017-2018 Nathan Chancellor
+#
+# Utility and terminal setup functions (usually for .bashrc)
+
+
+# Source our universal functions script
+source "$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" || return; pwd)/../common"
+
+
+# Source the machine specific functions
+case "$(whoami)@$(uname -n)" in
+    "chronos@localhost") LOCATION=crosh ;;
+    "natechancellor@penguin") LOCATION=crostini ;;
+    "nathan@flashbox") LOCATION=server ;;
+    "pi@raspberrypi") LOCATION=pi ;;
+esac
+source "${SCRIPTS_FOLDER}/os/${LOCATION}"
+
+
+# Universal aliases/functions
+function aliases() {
+    # tmux alias
+    command -v tmux &>/dev/null && alias tmux='tmux -u'
+
+    source "${SCRIPTS_FOLDER}/snippets/deldog"
+    source "${SCRIPTS_FOLDER}/snippets/git"
+    source "${SCRIPTS_FOLDER}/snippets/transfer"
+}
+
+
+# Try to attach via tmux
+function tmux_attach() {
+    command -v tmux &>/dev/null || return
+    if [[ -z ${TMUX} ]]; then
+        ID=$(tmux ls | grep -vm1 attached | cut -d: -f1)
+        if [[ -z ${ID} ]]; then
+            tmux -u new-session
+        else
+            tmux -u attach-session -t "${ID}"
+        fi
+    fi
+}
+
+
+# Add something to the beginning of PATH if it isn't already there
+function add_to_path_pre() {
+    [[ ! -d ${1} ]] && return
+    [[ -z $(echo "${PATH}" | rg -s --color=never "${1}") ]] && export PATH="${1}:${PATH}"
+}
+
+
+# Add something to the end of PATH if it isn't already there
+function add_to_path_post() {
+    [[ ! -d ${1} ]] && return
+    [[ -z $(echo "${PATH}" | rg -s --color=never "${1}") ]] && export PATH="${PATH}:${1}"
+}
+
+
+function bash_setup() {
+    aliases
+    "${LOCATION}"_aliases
+    tmux_attach
+    "${LOCATION}"_setup
+    add_to_path_pre "${SCRIPTS_FOLDER}"
+    GPG_TTY=$(tty); export GPG_TTY
+}
+
+
+# bashrc reload function
+function rld() {
+    source "${SCRIPTS_FOLDER}/os/common"
+    bash_setup
+}

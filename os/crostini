@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Copyright (C) 2018 Nathan Chancellor
+#
+# Utility and terminal setup functions for crostini on my Pixelbook
+
+
+# Setup function
+function bootstrap() {
+    # Grab common functions/variables
+    [[ ! -f ${HOME}/scripts/common ]] && source <(curl -Ls https://github.com/nathanchance/scripts/raw/master/common) &>/dev/null
+
+    # Make sure keys are present
+    local KEYS; KEYS=${HOME}/keys
+    [[ ! -d ${KEYS} ]] && { warn "${KEYS} not found, skipping GPG and SSH keys setup!"; NO_KEYS=true; }
+
+    # Set architecture variables
+    case "$(uname -m)" in
+        "aarch64") ARCH=arm64 ;;
+        "x86_64") ARCH=amd64 ;;
+        *) display_error "Unsupported architecture!"; return 1 ;;
+    esac
+
+    # Install packages from Debian repos
+    sudo apt update
+    sudo apt upgrade -y
+    sudo apt install -y build-essential devscripts git gpg jq mosh most python-pip ssh tmux vim
+
+    # Install speedtest-cli
+    sudo curl -Lo /usr/local/bin/speedtest-cli https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py
+    sudo chmod +x /usr/local/bin/speedtest-cli
+
+    # Setup git
+    git config --global core.editor vim
+    git config --global user.name "Nathan Chancellor"
+    git config --global user.email "natechancellor@gmail.com"
+
+    # Install hub
+    HUB_VERSION=2.5.1
+    curl -LO https://github.com/github/hub/releases/download/v${HUB_VERSION}/hub-linux-${ARCH}-${HUB_VERSION}.tgz
+    tar -xf hub-linux-${ARCH}-${HUB_VERSION}.tgz
+    cd hub-linux-${ARCH}-${HUB_VERSION} || { display_error "Downloading or extracting hub failed!"; return 1; }
+    sudo prefix=/usr/local ./install
+    cd "${OLDPWD}" || { display_error "${OLDPWD} doesn't exist??"; return 1; }
+    rm -rf hub*
+
+    # Install prebuilt ripgrep and fd binaries if available
+    FD_VERSION=7.1.0
+    RG_VERSION=0.9.0
+    if [[ ${ARCH} = "amd64" ]]; then
+        for URL in https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd-musl_${FD_VERSION}_amd64.deb \
+                   https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/ripgrep_${RG_VERSION}_amd64.deb; do
+            curl -LO "${URL}"
+            sudo dpkg -i "$(basename "${URL}")" && rm "$(basename "${URL}")"
+        done
+    # Build them from source otherwise
+    else
+        # Install rust
+        curl https://sh.rustup.rs -sSf | sh
+        source "${HOME}"/.cargo/env
+
+        for PAIR in fd:https://github.com/sharkdp/fd/archive/v${FD_VERSION}.zip \
+                    ripgrep:https://github.com/BurntSushi/ripgrep/archive/${RG_VERSION}.zip; do
+            BINARY=${PAIR%%:*}
+            URL=${PAIR#*:}
+            TMP=$(mktemp)
+
+            curl -L "${URL}" -o "${TMP}"
+            unzip "${TMP}"
+            cd "${BINARY}"-* || { display_error "Downloading or extracting ${BINARY} failed!"; return 1; }
+            cargo build --release
+            cargo install
+            cd "${OLDPWD}" || { display_error "${OLDPWD} doesn't exist??"; return 1; }
+            rm -rf "${OLDPWD}" "${TMP}"
+        done
+    fi
+
+    # Setup SSH and GPG if keys are present
+    if [[ -z ${NO_KEYS} ]]; then
+        mkdir -p "${HOME}"/.ssh
+        mv "${KEYS}"/id_ed25519{,.pub} "${HOME}"/.ssh
+        chmod 600 "${HOME}"/.ssh/id_ed25519
+
+        # Setup GPG
+        gpg --import "${KEYS}"/{public*,private*}.asc
+        gpg --import-ownertrust "${KEYS}"/ownertrust*.asc
+        git config --global commit.gpgsign true
+        git config --global user.signingkey 2437CB76E544CB6AB3D9DFD399739260CB6CB716
+        {
+            echo "default-cache-ttl 3600"
+            echo "max-cache-ttl 86400"
+        } > "${HOME}"/.gnupg/gpg-agent.conf
+        gpg-connect-agent reloadagent /bye
+    fi
+
+    # Clone scripts
+    git clone git@github.com:nathanchance/scripts "${HOME}"/scripts || return 1
+
+    # Clone repos
+    mkdir -p "${HOME}"/repos
+    local DOTFILES; DOTFILES=${HOME}/repos/dotfiles
+    git clone git@github.com:nathanchance/dotfiles "${DOTFILES}" || return 1
+
+    # Copy files into their proper locations
+    # vim
+    cp -r "${DOTFILES}"/common/vim "${HOME}"/.vim
+    mv "${HOME}"/.vim/.vimrc "${HOME}"
+    # .git-prompt.sh
+    cp "${DOTFILES}"/common/.git-prompt.sh "${HOME}"
+    # tmux
+    cp "${DOTFILES}"/pixelbook/.tmux.conf "${HOME}"
+
+    # Run small setup scripts from dotfiles
+    bash "${DOTFILES}"/common/global_gitignore.sh
+
+    # Setup bash_aliases
+    {
+        echo
+        echo "[[ -f \${HOME}/scripts/os/common ]] && source \"\${HOME}/scripts/os/common\""
+        echo "type -p bash_setup && bash_setup"
+    } > "${HOME}"/.bash_aliases
+
+    # Let her rip!
+    source "${HOME}"/.bashrc
+}
+
+
+# Laptop specific aliases
+function crostini_aliases() {
+    alias mshfb='mosh nathan@nathanchance.me'
+}
+
+
+# Setup PS1 and such
+function crostini_prompt() {
+    if [[ -f ${HOME}/.git-prompt.sh ]]; then
+        source "${HOME}"/.git-prompt.sh
+        export GIT_PS1_SHOWDIRTYSTATE=1
+        export GIT_PS1_SHOWUPSTREAM=auto
+        export PROMPT_COMMAND='__git_ps1_custom "\[\033[01;31m\]\u@\h \[\033[01;33m\]\w\[\033[01;36m\]" " \[\033[39m\]\$\[\033[0m\] "'
+    fi
+}
+
+
+# Laptop specific setup
+function crostini_setup() {
+    crostini_prompt
+}

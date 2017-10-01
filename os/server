@@ -1,0 +1,1102 @@
+#!/usr/bin/env bash
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Copyright (C) 2017-2018 Nathan Chancellor
+#
+# Utility and terminal setup functions for my build server
+
+
+# Build server specific aliases
+function server_aliases() {
+    # default Arch ls alias
+    alias ls='ls --color=auto'
+
+    # Change directory aliases
+    alias ack='cd ${KERNEL_FOLDER}/sources/kernel-common'
+    alias pkg='cd ${REPO_FOLDER}/pkgbuilds'
+    alias op6='cd ${KERNEL_FOLDER}/flash/op6'
+    alias op6c='cd ${KERNEL_FOLDER}/flash/op6-custom'
+    alias op6ak='cd ${KERNEL_FOLDER}/flash/anykernel2-op6'
+    alias pi='cd ${KERNEL_FOLDER}/pi'
+    alias pxl='cd ${KERNEL_FOLDER}/flash/marlin'
+    alias pxlak='cd ${KERNEL_FOLDER}/flash/anykernel2-marlin'
+    alias pxl2='cd ${KERNEL_FOLDER}/flash/wahoo'
+    alias pxl2ak='cd ${KERNEL_FOLDER}/flash/anykernel2-wahoo'
+    alias tlc='cd ${TC_FOLDER}'
+    alias sod='cd ${KERNEL_FOLDER}/sony/kernel'
+    alias spt='cd ${SCRIPTS_FOLDER}'
+
+    # Generate a kernel version for the current tree
+    alias kver='make kernelversion'
+
+    # Setup build for AOSP
+    alias senv='. build/envsetup.sh'
+
+    # Alias for flash-kernel script
+    alias fk='flash-kernel'
+
+    # Alias for merge-stable script
+    alias ms='merge-stable'
+
+    # Clean out web folder
+    alias wfc='git -C ${WEB_FOLDER}/downloads/kernels cl'
+}
+
+
+# Setup PS1 and such
+function server_prompt() {
+    source ~/.git-prompt.sh
+    export GIT_PS1_SHOWDIRTYSTATE=1
+    export GIT_PS1_SHOWUPSTREAM=auto
+    export PROMPT_COMMAND='__git_ps1_custom "\[\033[01;34m\]\u@\h \[\033[01;32m\]\w\[\033[01;31m\]" " \[\033[39m\]\$\[\033[0m\] "'
+}
+
+
+# Setup ccache
+# ccache_setup <size>
+function ccache_setup() {
+    if [[ -f ${CCACHE} ]]; then
+        if [[ -n ${1} ]]; then
+            ccache -M "${1}"G &> /dev/null
+            ccache --set-config=compression=true
+            ccache --set-config=compression_level=9
+            export USE_CCACHE=1
+            add_to_path_pre "/usr/lib/ccache/bin"
+        else
+            display_error "Please specify ccache size!"
+        fi
+    else
+        display_error "Please install ccache!"
+    fi
+}
+
+
+# Additional setup steps for my build server
+function server_setup() {
+    server_prompt
+    ccache_setup 250
+    LOG=$(mktemp); export LOG
+    add_to_path_post "${HOME}/.gem/ruby/2.5.0/bin"
+    source "${SCRIPTS_FOLDER}"/snippets/bk
+    ( gpg_available )
+}
+
+
+# Repo sync shorthand
+# SC2120: rps references arguments, but none are ever passed.
+# shellcheck disable=SC2120
+function rps {
+    repo sync "${JOBS_FLAG}" --force-sync -c --no-clone-bundle --no-tags --optimized-fetch --prune "${@}"
+}
+
+
+# Repo init and sync function
+# ris <url> <branch> |-s|
+function ris {
+    # User requested a shallow clone
+    [[ ${3} = "-s" ]] && local DEPTH="--depth=1"
+
+    repo init -u "${1}" -b "${2}" --no-clone-bundle ${DEPTH}
+
+    # SC2119: Use rps "$@" if function's $1 should mean script's $1.
+    # shellcheck disable=SC2119
+    time rps
+}
+
+
+# Add kernel remotes to a kernel repo
+function kremotes() {
+    if [[ ! -f Makefile ]]; then
+        display_error "Run this in a kernel tree!"
+        return 1
+    fi
+
+    git remote add aosp-kc https://android.googlesource.com/kernel/common
+    git remote add aosp-msm https://android.googlesource.com/kernel/msm
+    git remote add linux https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+    git remote add linux-stable https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+    git remote add linux-stable-rc https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable-rc.git
+
+    git remote update
+}
+
+
+# Neofetch alias
+function nf() {
+    echo
+    neofetch \
+        --kernel_shorthand on \
+        --distro_shorthand tiny \
+        --os_arch off \
+        --uptime_shorthand tiny \
+        --speed_shorthand on \
+        --install_time off \
+        --color_blocks off \
+        "${@}"
+    echo
+    echo
+}
+
+
+# Find config values in a kernel tree
+# kfg [-c <defconfig_file>] [-f <config>] [-e <config>] [-d <config>]
+function kfg() {
+    local CONFIG DEFCONFIGS LIST
+    DEFCONFIGS="$(ls arch/arm64/configs/flash*_defconfig 2>/dev/null)"
+
+    while [[ ${#} -ge 1 ]]; do
+        case ${1} in
+            "-c"|"--config")
+                shift
+
+                DEFCONFIGS=${1} ;;
+
+            "-d"|"--disable")
+                shift
+
+                CONFIG=${1//CONFIG_/}
+                for DEFCONFIG in ${DEFCONFIGS}; do
+                    echo "# CONFIG_${CONFIG} is not set" >> arch/arm64/configs/"$(basename "${DEFCONFIG}")"
+                done ;;
+
+            "-e"|"--enable")
+                shift
+
+                CONFIG=${1//CONFIG_/}
+
+                for DEFCONFIG in ${DEFCONFIGS}; do
+                    echo "CONFIG_${CONFIG}=y" >> arch/arm64/configs/"$(basename "${DEFCONFIG}")"
+                done ;;
+
+            "-f"|"--find")
+                shift
+
+                CONFIG=${1//CONFIG_/}
+
+                header "LOCATIONS OF ${CONFIG} IN TREE"
+                git grep -n -1 "${CONFIG}" | rg --color=never Kconfig
+
+                LIST=$(rg --color=never "${CONFIG}" out/.config)
+                if [[ -n ${LIST} ]]; then
+                    header "LOCATIONS OF ${CONFIG} IN CONFIG FILE"
+                    echo "${LIST}"
+                fi
+
+                echo ;;
+
+            "-u"|"--update")
+                shift
+
+                for DEFCONFIG in ${DEFCONFIGS}; do
+                    [[ "${*}" =~ "-fc" ]] && FILE=out/.config || FILE=out/defconfig
+                    rm -rf out
+                    make O=out ARCH=arm64 "$(basename "${DEFCONFIG}")"
+                    make O=out ARCH=arm64 savedefconfig
+                    cp -v "${FILE}" arch/arm64/configs/"$(basename "${DEFCONFIG}")"
+                done ;;
+        esac
+
+        shift
+    done
+}
+
+
+# Release Flash Kernel build for specified device
+# frel <device> <version>
+function frel() {
+    flash-kernel --device "${1}" \
+                 --mode stable \
+                 --telegram \
+                 --version "${2}"
+}
+
+
+# Build Flash Kernel test builds
+# ftest <device> <version> <dirty_version> <type>
+function ftest() {
+    [[ ${#} -gt 4 ]] && queue-tag -c "${2}"
+    flash-kernel --branch "queue-${2}" \
+                 --device "${1}" \
+                 --mode "${4}" \
+                 --revision "${3}" \
+                 --telegram \
+                 --version "${2}"
+    [[ ${#} -gt 4 ]] && queue-tag -d "${2}"
+}
+
+
+# Regenerate Pixel 2 build binaries
+function rpb() {
+    cd "${KERNEL_FOLDER}/sources/aosp-pixel2" || return
+
+    mkavenv
+    . build/envsetup.sh
+    lunch aosp_taimen-user
+    m "${JOBS_FLAGS}" clean
+    m "${JOBS_FLAGS}" mkdtimg
+    rmvenv
+
+    cp out/host/linux-x86/bin/mkdtimg "${BIN_FOLDER}"
+
+    cd "${SCRIPTS_FOLDER}" || return
+
+    git status
+}
+
+
+# Sign zip files for TWRP flashability
+function signzip() {
+    local FILE=${1}
+    if echo "${FILE}" | grep -q -v zip; then
+        display_error "This can only sign zip files!"
+        return 1
+    fi
+    if [[ ! -f ${FILE} ]]; then
+        display_error "Zip file does not exist!"
+        return 1
+    fi
+
+    header "Signing ${FILE}"
+
+    # Shift to the folder containing the zip
+    cd "$(dirname "${FILE}")" || return
+
+    # Get the zip name
+    SIGNED_ZIP="$(basename "${FILE}")"
+    UNSIGNED_ZIP="$(basename "${FILE}" .zip)-unsigned.zip"
+
+    # Sign the zip
+    mv "${SIGNED_ZIP}" "${UNSIGNED_ZIP}"
+    java -jar "${BIN_FOLDER}/zipsigner-3.0.jar" \
+              "${UNSIGNED_ZIP}" \
+              "${SIGNED_ZIP}"
+    rm "${UNSIGNED_ZIP}"
+
+    # Echo zip location
+    echo "Signed zip: ${PWD}/${SIGNED_ZIP}\n"
+    cd "${OLDPWD}" || return
+}
+
+
+# Manage queue tags
+# queue-tag [-c|-d] <version> <hash>
+function queue-tag() {
+    if [[ ! -f Makefile ]]; then
+        display_error "Run this in a kernel tree!"
+        return 1
+    fi
+
+    case ${1} in
+        "-c"|"--create")
+            git tag -f -a "queue-${2}" -m "Queue for Flash v${2}" -s "${3:-HEAD}"
+            git push -f origin "queue-${2}" ;;
+
+        "-d"|"--delete")
+            git tag -d "queue-${2}"
+            git push origin :"queue-${2}" ;;
+    esac
+}
+
+
+# Does it build function
+# SC2120: dib references arguments, but none are ever passed.
+# shellcheck disable=SC2120
+function dib() {(
+    DEVICE=$(basename "${PWD}")
+    START=$(date +%s)
+
+    while [[ ${#} -ge 1 ]]; do
+        case ${1} in
+            "-l"|"--log") WANTS_LOG=true ;;
+        esac
+        shift
+    done
+
+    [[ -n ${WANTS_LOG} ]] && rm -r "${LOG}"
+
+    # Set common parameter lists
+    AOSP_GCC="--gcc-toolchain aosp-gcc-arm64 --gcc-32-bit-toolchain aosp-gcc-arm"
+    BTG_GCC="--gcc-toolchain btg-gcc-8.2.1-arm64 --gcc-32-bit-toolchain btg-gcc-8.2.1-arm"
+    AOSP_CLANG_8="--compiler clang --clang-toolchain aosp-clang/clang-r339409b ${AOSP_GCC}"
+    AOSP_CLANG_7="--compiler clang --clang-toolchain aosp-clang/clang-r328903 ${AOSP_GCC}"
+    AOSP_CLANG_6="--compiler clang --clang-toolchain aosp-clang/clang-4691093 ${AOSP_GCC}"
+    CLANG_8="--compiler clang --clang-toolchain clang-8.x ${BTG_GCC}"
+    CLANG_7="--compiler clang --clang-toolchain clang-7.x ${BTG_GCC}"
+    CLANG_8_PERSONAL="${CLANG_8} --personal-optimization"
+    CLANG_7_PERSONAL="${CLANG_7} --personal-optimization"
+    GCC_821="--compiler gcc ${BTG_GCC}"
+    GCC_731="--compiler gcc --gcc-toolchain btg-linaro-gcc-7.3.1-arm64 --gcc-32-bit-toolchain btg-linaro-gcc-7.3.1-arm"
+    GCC_494="--compiler gcc ${AOSP_GCC}"
+
+    case ${DEVICE} in
+        marlin|op6|op6-custom|wahoo)
+            TC_LIST=( "${CLANG_8}"
+                      "${CLANG_7}"
+                      "${CLANG_8_PERSONAL}"
+                      "${CLANG_7_PERSONAL}"
+                      "${AOSP_CLANG_8}"
+                      "${AOSP_CLANG_7}"
+                      "${AOSP_CLANG_6}"
+                      "${GCC_821}"
+                      "${GCC_731}"
+                      "${GCC_494}" ) ;;
+        *) display_error "This folder doesn't support dib!"; return ;;
+    esac
+
+    for ITEM in "${TC_LIST[@]}"; do
+        read -ra ITEM_ARRAY <<< "${ITEM}"
+        flash-kernel --device "${DEVICE}" --mode tmp --image-only "${ITEM_ARRAY[@]}"
+    done
+
+    clear
+
+    if [[ -n ${WANTS_LOG} ]]; then
+        {
+            TIME_STRING=$(format_time "${START}" "$(date +%s)")
+            echo
+            echo
+            echo
+            echo "TOTAL DURATION: ${TIME_STRING,,}"
+        } >> "${LOG}"
+        URL="$(deldog "${LOG}")"
+        echo
+        echo "${BOLD}${DEVICE} results:${RST} ${URL}"
+        echo
+        tg_msg "${DEVICE} results: ${URL}"
+    fi
+)}
+
+
+# A version of dib for android-kernel-clang
+function dib-clang() {(
+    case "$(git cb)" in
+        "msm-3.18"*) DEFCONFIG=msm-perf_defconfig ;;
+        "msm-4.4"*) DEFCONFIG=msmcortex-perf_defconfig ;;
+        "msm-4.9"*) DEFCONFIG=sdm845-perf_defconfig ;;
+    esac
+
+    TC_LIST=( "--clang --clang-toolchain aosp-clang/clang-r339409b"
+              "--clang --clang-toolchain aosp-clang/clang-r328903"
+              "--clang --clang-toolchain aosp-clang/clang-4691093"
+              "" )
+    [[ "$(git cb)" =~ oreo ]] && TC_LIST+=( "--clang --clang-toolchain aosp-clang/clang-4053586" )
+
+    for ITEM in "${TC_LIST[@]}"; do
+        read -ra ITEM_ARRAY <<< "${ITEM}"
+        build-kernel -d "${DEFCONFIG}" -w -Werror -v oreo-small "${ITEM_ARRAY[@]}" "${@}"
+    done
+)}
+
+
+function ls-stats() {
+    if [[ ! -f Makefile ]]; then
+        display_error "Run this in a kernel tree!"
+        return 1
+    fi
+
+    VER=${1}
+    SBLVL=$(git tag --sort=-taggerdate -l v"${VER}"* | head -n 1 | sed s/v// | cut -d . -f 3)
+
+    echo "Linux ${VER} was released on $(git log -1 --format=%ai v"${VER}")
+
+The latest version of ${VER} is ${VER}.${SBLVL}, released on $(git log -1 --format=%ai v"${VER}.${SBLVL}")
+
+Number of commits in each version of ${VER}:
+
+v${VER}.1: $(git lo v"${VER}..v${VER}.1" | wc -l)
+$(for i in $(seq 2 "${SBLVL}"); do echo "v${VER}.$i: $(git lo "v${VER}.$((i - 1))..v${VER}.$i" | wc -l)"; done)
+
+Average number of commits in a version of ${VER}: $(($(git lo "v${VER}..v${VER}.${SBLVL}" | wc -l) / SBLVL))" > "${HOME}/web/stats/${VER}"
+}
+
+
+# Shellcheck function
+function shellcheck() {
+    # SC1090: Can't follow non-constant source. Use a directive to specify location.
+    # SC1091: Not following: build/envsetup.sh: openBinaryFile: does not exist (No such file or directory)
+    # SC1094: Parsing of sourced file failed. Ignoring it.
+    # SC1117: Backslash is literal in "\t". Prefer explicit escaping: "\\t".
+    # SC2028: echo won't expand escape sequences. Consider printf.
+    command shellcheck -x -e SC1090 -e SC1091 -e SC1094 -e SC1117 -e SC2028 "${@}"
+}
+
+
+# Shellcheck wrapper
+function sc() {
+    if ! [[ "${PWD}" =~ "scripts" ]]; then
+        display_error "Not in scripts folder, why are you running sc?"
+        return;
+    fi
+
+    case ${1} in
+        "-a"|"--all") FILES=$(find . -maxdepth 2 -type f -executable  -printf '%P\n' | rg -v bin) ;;
+        *) FILES=$(git diff --name-only --diff-filter=M) ;;
+    esac
+
+    echo
+    for FILE in ${FILES}; do
+        if shellcheck "${FILE}"; then
+            echo "${GRN}${FILE} is clean of warnings/errors!${RST}"
+        fi
+    done
+    echo
+}
+
+
+# makepkg wrapper for Linux kernel
+function mkpkg() {
+    local START TIME_STRING
+    START=$(date +%s)
+    if makepkg -si --noconfirm; then
+        TIME_STRING=$(format_time "${START}" "$(date +%s)")
+        tg_msg "\`Server kernel build completed successfully in ${TIME_STRING,,}\`"
+    else
+        tg_msg "\`Server kernel build failed in ${TIME_STRING,,}\`"
+    fi
+}
+
+
+# Update all remotes and run git gc/prune
+function clean-kernels() {(
+    REPOS=( "${HOME}/kernels/als/jasmine"
+            "${HOME}/kernels/als/marlin"
+            "${HOME}/kernels/als/msm-3.18"
+            "${HOME}/kernels/als/msm-4.4"
+            "${HOME}/kernels/als/msm-4.9"
+            "${HOME}/kernels/als/nash"
+            "${HOME}/kernels/als/op3"
+            "${HOME}/kernels/als/op5"
+            "${HOME}/kernels/als/op6"
+            "${HOME}/kernels/als/polaris"
+            "${HOME}/kernels/als/sagit"
+            "${HOME}/kernels/als/tissot"
+            "${HOME}/kernels/als/wahoo"
+            "${HOME}/kernels/als/whyred"
+            "${HOME}/kernels/flash/marlin"
+            "${HOME}/kernels/flash/op6"
+            "${HOME}/kernels/flash/op6-custom"
+            "${HOME}/kernels/flash/wahoo"
+            "${HOME}/kernels/pi"
+            "${HOME}/kernels/roms/aicp-op5"
+            "${HOME}/kernels/roms/aicp-op6"
+            "${HOME}/kernels/roms/gzr-op3"
+            "${HOME}/kernels/roms/gzr-op5"
+            "${HOME}/kernels/roms/lineage-nash"
+            "${HOME}/kernels/roms/lineage-op6"
+            "${HOME}/kernels/sony/kernel" )
+
+    for REPO in "${REPOS[@]}"; do
+        header "${REPO}"
+        if cd "${REPO}"; then
+            git fetch --all
+            git reflog expire --all --expire=now
+            git gc --aggressive --prune=now --force
+        else
+            display_error "$(basename "${REPO}") doesn't exist!"
+        fi
+    done
+)}
+
+
+# Update AnyKernel2 from osm0sis's GitHub
+function update-ak2() {(
+    REPOS=( "${HOME}/kernels/flash/anykernel2-marlin"
+            "${HOME}/kernels/flash/anykernel2-op6"
+            "${HOME}/kernels/flash/anykernel2-wahoo" )
+
+    for REPO in "${REPOS[@]}"; do
+        BRANCH=${REPO##*:}
+        REPO=${REPO%%:*}
+        header "Updating $(basename "${REPO}")"
+
+        cd "${REPO}" || {
+            display_error "${REPO} does not exist, please clone it from GitHub!"
+            return 1
+        }
+
+        if ! git ls-remote --exit-code upstream 1>/dev/null; then
+            git remote add upstream https://github.com/osm0sis/AnyKernel2
+        fi
+
+        if [[ "${REPO}" != "${BRANCH}" ]]; then
+            TARGET_BRANCH=${BRANCH}
+        else
+            TARGET_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        fi
+
+        git ch -q master
+        git pull -q upstream master
+        git push -q
+
+        git ch -q "${TARGET_BRANCH}"
+        if ! git ml --no-edit master; then
+            display_error "Conflicts detected! Please fix them then run 'git mc'"
+            return 1
+        fi
+        git push -q
+    done
+    echo
+)}
+
+
+# Build android/common kernel
+function ac-kernel() {
+    local UPDATE VERSION
+    cd "${HOME}/kernels/sources/kernel-common" || return
+
+    while [[ ${#} -ge 1 ]]; do
+        case ${1} in
+            "-u"|"--update") UPDATE=true ;;
+            *) VERSION=${1} ;;
+        esac
+
+        shift
+    done
+    echo
+
+    [[ -z ${VERSION} ]] && VERSION=4.4
+    
+    # Checkout proper branch
+    git checkout -q "android-${VERSION}"
+
+    # Update
+    [[ -n ${UPDATE} ]] && git pull
+
+    # Configure
+    git clean -fxdq
+    mkdir -p out
+    {
+        case ${VERSION} in
+            "4.4") ./android/configs/android-fetch-configs.sh ;;
+            *) ./kernel/configs/android-fetch-configs.sh ;;
+        esac
+        cat arch/arm64/configs/defconfig \
+            android-base.cfg \
+            android-base-arm64.cfg \
+            android-recommended.cfg > out/.config
+        make ARCH=arm64 O=out olddefconfig prepare
+    } &> /dev/null
+
+    # Build the kernel
+    time make "${JOBS_FLAG}" \
+              ARCH=arm64 \
+              CC="${CCACHE} ${TC_FOLDER}/aosp-clang/clang-r328903/bin/clang" \
+              CLANG_TRIPLE=aarch64-linux-gnu- \
+              CROSS_COMPILE="${TC_FOLDER}/aosp-gcc-arm64/bin/aarch64-linux-android-" \
+              O=out > /dev/null
+
+    # Show version information
+    if [[ -f out/arch/arm64/boot/Image ]]; then
+        echo "\n${GRN}Kernel build successful!${RST}"
+        echo "\n${BOLD}Kernel version:${RST} $(cat out/include/config/kernel.release)"
+    else
+        display_error "Kernel build failed!"
+    fi
+    echo
+}
+
+
+# Change email for git repositories
+function change-email() {
+    if [[ ${#} -lt 1 ]]; then
+        display_error "This function takes an argument!"
+        return 1
+    fi
+
+    case ${1} in
+        "du")
+            git config user.email "nathan@dirtyunicorns.com" ;;
+        "prjkt")
+            git config user.email "nathan@prjkt.io" ;;
+        "personal")
+            git config --unset user.email ;;
+    esac
+}
+
+
+# Update kernel function
+function updk() {
+    if ! cd "${HOME}/repos/pkgbuilds"; then
+        display_error "PKGBUILD folder not found!"
+        return
+    fi
+
+    if ! git fetch upstream packages/linux; then
+        display_error "Error fetching upstream!"
+        return
+    fi
+
+    if ! git ml --no-edit upstream/packages/linux; then
+        display_error "Error updating from upstream!"
+        return
+    fi
+
+    git push
+
+    git cl --exclude trunk/archlinux-linux -f
+
+    cd trunk || return
+
+    mkpkg
+}
+
+
+# Function to incrementally patch a kernel with stable
+function stable-patch() {(
+    CURRENT_VERSION=$(kver)
+    TARGET_PATCH_LEVEL=$((${CURRENT_VERSION##*.} + 1))
+
+    URL=https://cdn.kernel.org/pub/linux/kernel/v4.x/incr/patch-"${CURRENT_VERSION}"-"${TARGET_PATCH_LEVEL}".xz
+
+    MESSAGE="treewide: Linux ${CURRENT_VERSION%.*}.${TARGET_PATCH_LEVEL}
+
+source kernel.org
+${URL}"
+
+    if curl "${URL}" | xz -cd | git ap "${@}"; then
+        git ac -m "${MESSAGE}"
+    else
+        echo
+        echo
+        echo "git ac -m \"${MESSAGE}\""
+        echo
+        echo
+    fi
+)}
+
+
+# Update/init qcacld-3.0 tree
+function qcacld() {(
+    REPOS=( "fw-api" "qcacld-3.0" "qca-wifi-host-cmn" )
+
+    while [[ ${#} -ge 1 ]]; do
+        case ${1} in
+            "-i"|"--init") INIT=true ;;
+            "-t"|"--tag") shift; TAG=${1} ;;
+            "-u"|"--update") UPDATE=true ;;
+        esac
+        shift
+    done
+    [[ -n ${INIT} && -n ${UPDATE} ]] && { display_error "Both init and update were specified!"; return; }
+
+    case "${PWD}" in
+        *"sony"*)
+            case "$(make kernelversion)" in
+                4.4*) TAG=aosp/LA.UM.6.4.r1 ;;
+                4.9*) TAG=aosp/LE.UM.2.3.2.r1.4 ;;
+            esac
+            URL=https://github.com/sonyxperiadev/vendor-qcom-opensource-wlan-
+            SUBFOLDER=drivers/staging/wlan-qc ;;
+
+        *)
+            URL=https://source.codeaurora.org/quic/la/platform/vendor/qcom-opensource/wlan/
+            SUBFOLDER=drivers/staging ;;
+    esac
+    [[ -z ${TAG} ]] && { display_error "No tag was specified!"; return; }
+
+    for REPO in "${REPOS[@]}"; do
+        echo "${REPO}"
+        if ! git ls-remote --exit-code "${REPO}" &>/dev/null; then
+            git remote add "${REPO}" "${URL}${REPO}"
+        fi
+        git fetch "${REPO}" "${TAG}"
+        if [[ -n ${INIT} ]]; then
+            if [[ "${PWD}" =~ "sony" ]]; then
+                git rm "${SUBFOLDER}/${REPO}"
+                git ac -m "staging: ${REPO}: Remove submodule reference"
+            fi
+
+            git m --allow-unrelated-histories -s ours --no-commit FETCH_HEAD
+            git read-tree --prefix="${SUBFOLDER}/${REPO}" -u FETCH_HEAD
+            git c --no-edit -m "staging: ${REPO}: Checkout at ${TAG}"
+        elif [[ -n ${UPDATE} ]]; then
+            git m --no-edit -m "staging: ${REPO}: Merge tag '${TAG}' into $(git cb)" \
+                  -X subtree="${SUBFOLDER}/${REPO}" FETCH_HEAD
+        fi
+    done
+)}
+
+
+# Defaults for build-clang
+function build-clang() {
+    command build-clang "${@}"
+}
+
+
+# build-tools-gcc wrapper
+function btg() {(
+    [[ "${*}" =~ "-t" || "${*}" =~ "--telegram" ]] && TG=true && TG_MSG_FILE=$(mktemp)
+    cd "${HOME}/gcc-build" || return
+    git pull
+
+    for ITEM in arm64:aarch64-linux-gnu arm:arm-linux-gnueabi; do
+        ARCH=${ITEM%:*}
+        TARGET=${ITEM#*:}
+
+        for GCC in Linaro:7.3.1 GNU:8.2.1; do
+            SOURCE=${GCC%:*}
+            VERSION=${GCC#*:}
+            START=$(date +"%s")
+            ./build -a "${ARCH}" -s "${SOURCE,,}" -v "${VERSION:0:1}" --full-src
+            TIME_ELAPSED=$(format_time "${START}" "$(date +"%s")")
+            if [[ -d ${TARGET} ]]; then
+                SOURCE_STRING=${SOURCE}
+                [[ ${SOURCE} = "GNU" ]] && unset SOURCE || SOURCE="${SOURCE,,}-"
+                FOLDER=${HOME}/toolchains/btg-${SOURCE}gcc-${VERSION}-${ARCH}
+                rm -rf "${FOLDER}"
+                mv "${TARGET}" "${FOLDER}"
+                if [[ -n ${TG} ]]; then
+                    {
+                        echo "\`\`\`"
+                        echo "${SOURCE_STRING} GCC ${VERSION} for ${ARCH} build successfully!"
+                        echo
+                        echo "Time elapsed: ${TIME_ELAPSED,,}"
+                        echo
+                        echo "Installation folder: ${FOLDER}"
+                        echo
+                        echo "Version: $("${FOLDER}/bin/${TARGET}-gcc" --version | head -1)"
+                        echo "\`\`\`"
+                    } > "${TG_MSG_FILE}"
+                    tg_msg "$(cat "${TG_MSG_FILE}")"
+                fi
+            else
+                if [[ -n ${TG} ]]; then
+                    {
+                        echo "\`\`\`"
+                        echo "Error while building ${SOURCE} GCC ${VERSION} for ${ARCH}!"
+                        echo
+                        echo "Time elapsed: ${TIME_ELAPSED,,}"
+                        echo "\`\`\`"
+                    } > "${TG_MSG_FILE}"
+                    tg_msg "$(cat "${TG_MSG_FILE}")"
+                fi
+            fi
+        done
+    done
+
+    rm -f "${TG_MSG_FILE}"
+)}
+
+
+# Update all toolchains
+function updtc() {
+    local BINARIES
+
+    # Clang 7.x
+    build-clang -t -s
+    # Clang 8.x
+    build-clang -t
+    # Linaro GCC 7.3.1 and GNU GCC 8.2.1 and 9.0.0
+    btg -t
+
+    clear
+
+    BINARIES=( "${HOME}/toolchains/clang-8.x/bin/clang"
+               "${HOME}/toolchains/clang-7.x/bin/clang"
+               "${HOME}/toolchains/btg-gcc-8.2.1-arm64/bin/aarch64-linux-gnu-ld"
+               "${HOME}/toolchains/btg-gcc-8.2.1-arm/bin/arm-linux-gnueabi-ld" )
+
+    for BINARY in "${BINARIES[@]}"; do
+        ${BINARY} --version
+        echo
+    done
+}
+
+
+# Build all Flash Kernel builds a certain amount of times
+function fkba() {(
+    for DEVICE in marlin op6 wahoo; do
+        BRANCH=${DEVICE##*:}
+        DEVICE=${DEVICE%%:*}
+        rm -f "${LOG}"
+        START=$(date +%s)
+        cd "${KERNEL_FOLDER}/flash/${DEVICE}" || { warn "${DEVICE} folder does not exist, skipping!"; continue; }
+        if [[ "${BRANCH}" != "${DEVICE}" ]]; then
+            git ch "${BRANCH}" || { warn "${BRANCH} for ${DEVICE} does not exist, skipping!"; continue; }
+        fi
+        [[ ${1} = "-n" || ${1} = "--number" ]] && { shift; NUM=${1}; }
+        [[ -z ${NUM} ]] && NUM=1
+        # SC2119: Use dib "$@" if function's $1 should mean script's $1.
+        # shellcheck disable=SC2119
+        for i in $(seq 1 ${NUM}); do dib; done
+        {
+            TIME_STRING=$(format_time "${START}" "$(date +%s)")
+            echo
+            echo
+            echo
+            echo "TOTAL DURATION: ${TIME_STRING,,}"
+        } >> "${LOG}"
+        tg_msg "${DEVICE} results: $(deldog "${LOG}")"
+    done
+)}
+
+
+# Symlink the generic-commands file to all of the android-linux-stable trees for a particular kernel version
+function symlink-commands() {(
+    case ${1} in
+        "3.18") FILES=( "marlin" "msm-3.18" "op3-android-8.1" "op3-lineage-15.1" "op3-8.0.0" "tissot" ) ;;
+        "4.4") FILES=( "jasmine" "msm-4.4" "nash-oreo-8.0.0" "nash-lineage-15.1" "op5-android-8.1" "op5-lineage-15.1" "op5-O_8.1" "op5-O_8.1_Beta" "sagit" "wahoo" "whyred" ) ;;
+        "4.9") FILES=( "bluecross" "msm-4.9" "op6-android-9.0" "op6-lineage-15.1" "op6-P_9.0" "op6-P_9.0_Beta" "polaris" ) ;;
+    esac
+
+    for FILE in "${FILES[@]}"; do
+        ln -sf generic-commands "${FILE}-commands"
+    done
+)}
+
+
+# Patch check function
+function pch() {
+    [[ -f scripts/checkpatch.pl ]] && git fp -1 --stdout "${@}" | ./scripts/checkpatch.pl
+    [[ -f scripts/get_maintainer.pl ]] && git fp -1 --stdout "${@}" | ./scripts/get_maintainer.pl
+}
+
+
+# Quilt-like patch management function for Linux
+function sync-patches() {
+    [[ ! -f Makefile ]] && { display_error "You're not in a kernel folder!"; return 1; }
+
+    TARGET_FOLDER=${REPO_FOLDER}/patches/linux/$(git cb)
+
+    [[ ! -d ${TARGET_FOLDER} ]] && { display_error "${TARGET_FOLDER} doesn't exist, create it if this is intentional"; return 1; }
+
+    FIRST_HASH=$(git log --reverse --format=%H --committer="$(git config --get user.name) <$(git config --get user.email)>" origin/stable..HEAD | head -n1)
+
+    rm "${TARGET_FOLDER}"/*
+
+    git fp -o "${TARGET_FOLDER}" "${FIRST_HASH}"^..HEAD
+
+    git -C "${TARGET_FOLDER}" aa
+
+    git -C "${TARGET_FOLDER}" c -m "patches: linux: $(git cb): Sync as of $(git sh -s --format=%h)"
+
+    git -C "${TARGET_FOLDER}" push
+}
+
+
+# Build kernel with Clang (wrapper)
+function bkcw() {
+    local TARGET_ARCH MAKE_FLAGS
+
+    if [[ ! -f Makefile ]]; then
+        display_error "No Makefile found! Are you in a kernel tree?"
+        return
+    fi
+
+    TARGET_ARCH=${1}; shift
+    case "${TARGET_ARCH}" in
+        "arm") MAKE_FLAGS=( "ARCH=arm" "CROSS_COMPILE=arm-linux-gnueabi-" ) ;;
+        "arm64") MAKE_FLAGS=( "ARCH=arm64" "CROSS_COMPILE=aarch64-linux-gnu-" ) ;;
+        "x86") MAKE_FLAGS=() ;;
+        *) display_error "Invalid TARGET_ARCH specified!"; return ;;
+    esac
+
+    time PATH=${PATH_OVERRIDE:+"${PATH_OVERRIDE}:"}${TC_FOLDER}/clang-8.x/bin:${TC_FOLDER}/btg-gcc-8.2.1-arm64/bin:${TC_FOLDER}/btg-gcc-8.2.1-arm/bin:${PATH} \
+    make "${JOBS_FLAG}" \
+         CC="${CCACHE} clang" \
+         HOSTCC=clang \
+         "${MAKE_FLAGS[@]}" \
+         "${@}"
+}
+
+
+# Extra configs for build/boot testings
+# From https://github.com/groeck/linux-build-test/blob/master/rootfs/scripts/common.sh
+function extraconfigs() {
+    echo "CONFIG_EXPERT=y
+CONFIG_DEBUG_KERNEL=y
+CONFIG_LOCK_DEBUGGING_SUPPORT=y
+CONFIG_DEBUG_RT_MUTEXES=y
+CONFIG_DEBUG_SPINLOCK=y
+CONFIG_DEBUG_MUTEXES=y
+CONFIG_DEBUG_WW_MUTEX_SLOWPATH=y
+CONFIG_DEBUG_LOCK_ALLOC=y
+CONFIG_DEBUG_LOCKDEP=y
+CONFIG_DEBUG_ATOMIC_SLEEP=y
+CONFIG_CRYPTO_MANAGER_DISABLE_TESTS=y
+CONFIG_CRC32_SELFTEST=y
+CONFIG_DEBUG_LOCKING_API_SELFTESTS=y
+CONFIG_DEBUG_NMI_SELFTEST=y
+CONFIG_DEBUG_RODATA_TEST=y
+CONFIG_DEBUG_TLBFLUSH=y
+CONFIG_DMATEST=y
+CONFIG_GLOB_SELFTEST=y
+CONFIG_PCI_EPF_TEST=y
+CONFIG_PCI_ENDPOINT_TEST=y
+CONFIG_PROVE_LOCKING=y
+CONFIG_PROVE_RCU=y
+CONFIG_RBTREE_TEST=y
+CONFIG_RCU_EQS_DEBUG=y
+CONFIG_STATIC_KEYS_SELFTEST=y
+CONFIG_STRING_SELFTEST=y
+CONFIG_TEST_BITMAP=y
+CONFIG_TEST_FIRMWARE=y
+CONFIG_TEST_SORT=y
+CONFIG_TEST_SYSCTL=y
+CONFIG_TEST_UUID=y
+CONFIG_TORTURE_TEST=y
+CONFIG_USB_TEST=y
+CONFIG_USB_EHSET_TEST_FIXTURE=y
+CONFIG_USB_LINK_LAYER_TEST=y
+CONFIG_WW_MUTEX_SELFTEST=y
+CONFIG_BLK_DEV_INITRD=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_SCSI=y
+CONFIG_BLK_DEV_SD=y
+CONFIG_SCSI_LOWLEVEL=y
+CONFIG_SCSI_DC395x=y
+CONFIG_SCSI_AM53C974=y
+CONFIG_SCSI_SYM53C8XX_2=y
+CONFIG_MEGARAID_SAS=y
+CONFIG_FUSION=y
+CONFIG_FUSION_SAS=y
+CONFIG_MMC=y
+CONFIG_MMC_SDHCI=y
+CONFIG_MMC_SDHCI_PCI=y
+CONFIG_BLK_DEV_NVME=y
+CONFIG_USB=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_EHCI_HCD=y
+CONFIG_USB_OHCI_HCD=y
+CONFIG_USB_STORAGE=y
+CONFIG_USB_UAS=y
+CONFIG_VIRTIO=y
+CONFIG_VIRTIO_PCI=y
+CONFIG_VIRTIO_PCI_LEGACY=y
+CONFIG_VIRTIO_BALLOON=y
+CONFIG_VIRTIO_MMIO=y
+CONFIG_BLK_MQ_VIRTIO=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VIRTIO_BLK_SCSI=y
+CONFIG_SCSI_VIRTIO=y" >> .config
+
+    [[ ${ARCH} =~ arm ]] && echo "CONFIG_LOCK_TORTURE_TEST=y
+CONFIG_RCU_TORTURE_TEST=y" >> .config
+
+    bkcw "${ARCH}" olddefconfig
+}
+
+# Build kernel with Clang
+function bkc() {
+    # Parameters
+    local ARCH CONFIG
+    ARCH=${1}; shift
+    CONFIG=${1}; shift
+
+    # Sanity checks
+    [[ -z ${ARCH} ]] && { display_error "ARCH not specified!"; return 1; }
+    [[ -z ${CONFIG} ]] && { display_error "CONFIG not specified!"; return 1; }
+    case ${ARCH} in
+        "arm"|"arm64"|"x86") ;;
+        *) display_error "Invalid ARCH specifed"; return 1 ;;
+    esac
+
+    # Clean up
+    git cl -q
+
+    # Configure kernel
+    bkcw "${ARCH}" "${CONFIG}"
+    [[ ${CONFIG} =~ defconfig ]] && extraconfigs
+
+    # Build kernel
+    bkcw "${ARCH}" "${@}" || return 1
+}
+
+
+# Boot a kernel in QEMU
+function boot-kernel() {
+    local ARCH KERNEL QEMU; ARCH=${1}; shift
+    [[ -z ${ARCH} ]] && { display_error "ARCH not specified!"; return 1; }
+
+    case ${ARCH} in
+        "arm")
+            [[ ! -f ../qemu/arm-rootfs.cpio ]] && { display_error "QEMU ramdisk not found! Please build it or use the proper folder."; return 1; }
+            IMAGE=zImage
+            QEMU=qemu-system-arm
+            QEMU_ARCH_CMDLINE=( -append "console=ttyAMA0"
+                                -initrd ../qemu/arm-rootfs.cpio
+                                -machine virt ) ;;
+        "arm64")
+            [[ ! -f ../qemu/arm64-rootfs.cpio ]] && { display_error "QEMU ramdisk not found! Please build it or use the proper folder."; return 1; }
+            IMAGE=Image
+            QEMU=qemu-system-aarch64
+            QEMU_ARCH_CMDLINE=( -append "console=ttyAMA0"
+                                -cpu cortex-a57
+                                -initrd ../qemu/arm64-rootfs.cpio
+                                -machine virt
+                                -machine "type=virt" ) ;;
+        "x86")
+            [[ ! -f ../qemu/x86_64-rootfs.img ]] && { display_error "QEMU disk image not found! Please create it or use the proper folder."; return 1; }
+            IMAGE=bzImage
+            QEMU=qemu-system-x86_64
+            QEMU_ARCH_CMDLINE=( -append "root=/dev/sda console=ttyS0"
+                                -cpu host
+                                -d unimp,guest_errors
+                                -drive "file=../qemu/x86_64-rootfs.img,format=raw,if=ide"
+                                -enable-kvm ) ;;
+        *) display_error "Invalid ARCH specified!"; return 1 ;;
+    esac
+
+    KERNEL=arch/${ARCH}/boot/${IMAGE}
+    [[ ! -f ${KERNEL} ]] && { display_error "Kernel doesn't exist! Please build one."; return 1; }
+
+    ${QEMU} "${QEMU_ARCH_CMDLINE[@]}" -kernel "${KERNEL}" -m 4G -nographic -smp 4 "${@}"
+}
+
+
+# Build a kernel and boot it
+function babk() {
+    local ARCH
+    ARCH=${1}; shift
+    [[ -z ${ARCH} ]] && { display_error "ARCH not specified!"; return 1; }
+
+    bkc "${ARCH}" defconfig KCFLAGS="-Werror" "${@}"
+
+    boot-kernel "${ARCH}"
+}
+
+
+# linux-next testing
+function lnt() {
+    local ARCH CONFIG CONFIGS LOG MESSAGE RESULT START TIME_STRING
+
+    # Logging
+    LOG=$(mktemp)
+
+    # Configurations known to build with -Werror
+    CONFIGS=( "arm:multi_v7_defconfig"
+              "arm64:defconfig"
+              "arm64:allyesconfig"
+              "x86:defconfig"
+              "x86:allyesconfig" )
+
+    for CONFIG in "${CONFIGS[@]}"; do
+        ARCH=${CONFIG%%:*}
+        CONFIG=${CONFIG##*:}
+
+        START=$(date +%s)
+        if ! bkc "${ARCH}" "${CONFIG}" KCFLAGS="-Werror"; then
+            RESULT=Failed
+        else
+            RESULT=Success
+        fi
+        TIME_STRING=$(format_time "${START}" "$(date +%s)")
+        {
+            echo "${ARCH}:${CONFIG} | ${RESULT} in ${TIME_STRING,,}"
+            echo
+        } >> "${LOG}"
+    done
+
+    MESSAGE="linux$(cat localversion-next) build results: $(deldog "${LOG}")"
+
+    tg_msg "${MESSAGE}"
+
+    clear
+    echo
+    echo "${MESSAGE}"
+    echo
+
+    rm "${LOG}"
+}
