@@ -183,6 +183,22 @@ static struct page **get_pages(struct drm_gem_object *obj)
 		}
 
 		msm_obj->pages = p;
+
+		msm_obj->sgt = drm_prime_pages_to_sg(p, npages);
+		if (IS_ERR(msm_obj->sgt)) {
+			void *ptr = ERR_CAST(msm_obj->sgt);
+
+			dev_err(dev->dev, "failed to allocate sgt\n");
+			msm_obj->sgt = NULL;
+			return ptr;
+		}
+
+		/* For non-cached buffers, ensure the new pages are clean
+		 * because display controller, GPU, etc. are not coherent:
+		 */
+		if (msm_obj->flags & (MSM_BO_WC|MSM_BO_UNCACHED))
+			dma_map_sg(dev->dev, msm_obj->sgt->sgl,
+					msm_obj->sgt->nents, DMA_BIDIRECTIONAL);
 	}
 
 	return msm_obj->pages;
@@ -193,8 +209,22 @@ static void put_pages(struct drm_gem_object *obj)
 	struct msm_gem_object *msm_obj = to_msm_bo(obj);
 
 	if (msm_obj->pages) {
-		if (use_pages(obj))
-			msm_drm_free_buf(obj);
+		if (msm_obj->sgt) {
+			/* For non-cached buffers, ensure the new
+			 * pages are clean because display controller,
+			 * GPU, etc. are not coherent:
+			 */
+			if (msm_obj->flags & (MSM_BO_WC|MSM_BO_UNCACHED))
+				dma_unmap_sg(obj->dev->dev, msm_obj->sgt->sgl,
+					     msm_obj->sgt->nents,
+					     DMA_BIDIRECTIONAL);
+
+			sg_free_table(msm_obj->sgt);
+			kfree(msm_obj->sgt);
+		}
+
+		if (iommu_present(&platform_bus_type))
+			drm_gem_put_pages(obj, msm_obj->pages, true, false);
 		else {
 			drm_mm_remove_node(msm_obj->vram_node);
 			drm_free_large(msm_obj->pages);
@@ -290,7 +320,7 @@ int msm_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	pfn = page_to_pfn(pages[pgoff]);
 
-	VERB("Inserting %pK pfn %lx, pa %lx", vmf->virtual_address,
+	VERB("Inserting %p pfn %lx, pa %lx", vmf->virtual_address,
 			pfn, pfn << PAGE_SHIFT);
 
 	ret = vm_insert_mixed(vma, (unsigned long)vmf->virtual_address, pfn);
@@ -399,7 +429,7 @@ int msm_gem_get_iova_locked(struct drm_gem_object *obj, int id,
 						msm_obj->domain[id].sgt,
 						IOMMU_READ | IOMMU_NOEXEC);
 				if (ret) {
-					DRM_ERROR("Unable to map phy buf=%pK\n",
+					DRM_ERROR("Unable to map phy buf=%p\n",
 						(void *)pa);
 					return ret;
 				}
@@ -414,7 +444,7 @@ int msm_gem_get_iova_locked(struct drm_gem_object *obj, int id,
 				msm_obj->domain[id].iova =
 				sg_dma_address(msm_obj->domain[id].sgt->sgl);
 			}
-			DRM_DEBUG("iova=%pK\n",
+			DRM_DEBUG("iova=%p\n",
 					(void *)msm_obj->domain[id].iova);
 		} else {
 			WARN_ONCE(1, "physical address being used\n");
@@ -599,7 +629,7 @@ void msm_gem_describe(struct drm_gem_object *obj, struct seq_file *m)
 	uint64_t off = drm_vma_node_start(&obj->vma_node);
 
 	WARN_ON(!mutex_is_locked(&dev->struct_mutex));
-	seq_printf(m, "%08x: %c(r=%u,w=%u) %2d (%2d) %08llx %pK %zu\n",
+	seq_printf(m, "%08x: %c(r=%u,w=%u) %2d (%2d) %08llx %p %zu\n",
 			msm_obj->flags, is_active(msm_obj) ? 'A' : 'I',
 			msm_obj->read_timestamp, msm_obj->write_timestamp,
 			obj->name, obj->refcount.refcount.counter,
