@@ -308,6 +308,7 @@ static int sdcardfs_show_options(struct vfsmount *mnt, struct seq_file *m,
 	if (opts->gid_derivation)
 		seq_puts(m, ",derive_gid");
 	if (opts->default_normal)
+	if (vfsopts->default_normal)
 		seq_puts(m, ",default_normal");
 	if (opts->reserved_mb != 0)
 		seq_printf(m, ",reserved=%uMB", opts->reserved_mb);
