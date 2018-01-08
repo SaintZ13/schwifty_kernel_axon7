@@ -130,6 +130,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 			opts->default_normal = true;
 			break;
 			vfsopts->default_normal = true;
+			break;
 		/* unknown option */
 		default:
 			if (!silent)
