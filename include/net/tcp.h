@@ -1236,6 +1236,7 @@ static inline bool tcp_paws_reject(const struct tcp_options_received *rx_opt,
 	   Actually, the problem would be not existing if all
 	   the implementations followed draft about maintaining clock
 	   via reboots. Linux-2.2 DOES NOT!
+
 	   However, we can relax time bounds for RST segments to MSL.
 	 */
 	if (rst && get_seconds() >= rx_opt->ts_recent_stamp + TCP_PAWS_MSL)
