@@ -1764,6 +1764,8 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 			value = 0;
 			break;
 		}
+
+		spin_lock(&cdev->lock);
 		value = f->set_alt(f, w_index, w_value);
 		if (value == USB_GADGET_DELAYED_STATUS) {
 			DBG(cdev,
@@ -1773,6 +1775,7 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 			DBG(cdev, "delayed_status count %d\n",
 					cdev->delayed_status);
 		}
+		spin_unlock(&cdev->lock);
 		break;
 	case USB_REQ_GET_INTERFACE:
 		if (ctrl->bRequestType != (USB_DIR_IN|USB_RECIP_INTERFACE))
@@ -1855,7 +1858,7 @@ unknown:
 		 * OS descriptors handling
 		 */
 		if (cdev->use_os_string && cdev->os_desc_config &&
-		    (ctrl->bRequest & USB_TYPE_VENDOR) &&
+		    (ctrl->bRequestType & USB_TYPE_VENDOR) &&
 		    ctrl->bRequest == cdev->b_vendor_code) {
 			struct usb_request		*req;
 			struct usb_configuration	*os_desc_cfg;
@@ -1925,6 +1928,16 @@ unknown:
 				}
 				break;
 			}
+
+			if (value < 0) {
+				DBG(cdev, "%s: unhandled os desc request\n",
+						__func__);
+				DBG(cdev, "req%02x.%02x v%04x i%04x l%d\n",
+					ctrl->bRequestType, ctrl->bRequest,
+					w_value, w_index, w_length);
+				return value;
+			}
+
 			req->length = value;
 			req->zero = value < w_length;
 			value = usb_ep_queue(gadget->ep0, req, GFP_ATOMIC);
