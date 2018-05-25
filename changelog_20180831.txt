@@ -1,0 +1,13 @@
+
+Project name: 
+  * Hardware Wakelock Suppressor v3 (TheOTO) [545a22d4a32b]
+  * power: Adjust Thermal Limits (MOVZX) [83dca446855a]
+  * Disable Add Random (Lorenzo Ori) [5ed16d764211]
+  * cpufreq: Add cpufreq_notify_utilization (djb77) [e62626f4d327]
+  * msm: kgsl: run kgsl-workqueue as a high prio wq (Francisco Franco) [d94c3c1d7eef]
+  * schwifty: enable frandom (SaintZ13) [55d084eb169d]
+  * drivers: Upgrade frandom from staging (savoca) [3a9873738f35]
+  * staging: frandom: Clear up checkpatch conflicts (savoca) [6ef0a1298093]
+  * staging: frandom: Dynamically allocate the char device numbers (savoca) [c003018d29dc]
+  * staging: Add frandom RNG driver (savoca) [44d18d21d985]
+
