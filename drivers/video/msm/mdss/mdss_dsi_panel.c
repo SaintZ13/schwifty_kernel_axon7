@@ -2678,6 +2678,7 @@ static int mdss_panel_parse_display_timings(struct device_node *np,
 		return rc;
 	}
 
+
 	num_timings = of_get_child_count(timings_np);
 	if (num_timings == 0) {
 		pr_err("no timings found within display-timings\n");
