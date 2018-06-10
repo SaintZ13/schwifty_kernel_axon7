@@ -7,6 +7,15 @@ config SECURITY_SELINUX
 	  This selects NSA Security-Enhanced Linux (SELinux).
 	  You will also need a policy configuration and a labeled filesystem.
 	  If you are unsure how to answer this question, answer N.
+	  
+config SECURITY_SELINUX_DEFPERMISSIVE
+	bool "NSA SELinux Permissive default"
+	depends on SECURITY_SELINUX
+	default n
+	help
+	  This enables or disables Permissive by default.
+
+	  If you are unsure how to answer this question, answer N.	  
 
 config SECURITY_SELINUX_BOOTPARAM
 	bool "NSA SELinux boot parameter"
