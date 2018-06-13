@@ -12,6 +12,7 @@
  *  Free Software Foundation;  either version 2 of the  License, or (at your
  *  option) any later version.
  *
+ * Modified by Skrem339 2018
  */
 
 #include <linux/module.h>
@@ -37,6 +38,8 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 
+#include <linux/moduleparam.h>
+
 #include "ak4490.h"
 
 
@@ -54,6 +57,15 @@
 #else
 #define akdbgprt(format, arg...) do {} while (0)
 #endif
+
+#define CAD_VERSION "3.0"
+
+int selected_filter = 4; // 1 slow roll-off, 2 short delay sharp, 3 sharp, 4 short delay slow
+module_param(selected_filter, int, 0644);
+int oversampling_freq = 768000; // allow to set custom oversampting rate
+module_param(oversampling_freq, int, 0644);
+int superslow = 0; // 0 - disable superslow filter, 1 - enable superslow filter
+module_param(superslow, int, 0644);
 
 /* AK4490 Codec Private Data */
 struct ak4490_priv {
@@ -502,12 +514,12 @@ static const struct snd_kcontrol_new ak4490_snd_controls[] = {
 	SOC_SINGLE("AK4490 External Digital Filter", AK4490_00_CONTROL1, 6, 1, 0),
 	SOC_SINGLE("AK4490 MCLK Frequncy Auto Setting", AK4490_00_CONTROL1, 7, 1, 0),
 	SOC_SINGLE("AK4490 Soft Mute Control", AK4490_01_CONTROL2, 0, 1, 0),
-	SOC_SINGLE("AK4490 Short delay filter", AK4490_01_CONTROL2, 5, 1, 0),
-	SOC_SINGLE("AK4490 Data Zero Detect Enable", AK4490_01_CONTROL2, 7, 1, 0),
+	SOC_SINGLE("AK4490 Short delay sharp filter", AK4490_01_CONTROL2, 5, 1, 0),
 	SOC_SINGLE("AK4490 Slow Roll-off Filter", AK4490_02_CONTROL3, 0, 1, 0),
-	SOC_SINGLE("AK4490 Invering Enable of DZF", AK4490_02_CONTROL3, 4, 1, 0),
-	SOC_SINGLE("AK4490 Mono Mode", AK4490_02_CONTROL3, 3, 1, 0),
 	SOC_SINGLE("AK4490 Super Slow Roll-off Filter", AK4490_05_CONTROL4, 0, 1, 0),
+	SOC_SINGLE("AK4490 Invering Enable of DZF", AK4490_02_CONTROL3, 4, 1, 0),
+	SOC_SINGLE("AK4490 Data Zero Detect Enable", AK4490_01_CONTROL2, 7, 1, 0),
+	SOC_SINGLE("AK4490 Mono Mode", AK4490_02_CONTROL3, 3, 1, 0),
 	SOC_SINGLE("AK4490 AOUTR Phase Inverting", AK4490_05_CONTROL4, 6, 1, 0),
 	SOC_SINGLE("AK4490 AOUTL Phase Inverting", AK4490_05_CONTROL4, 7, 1, 0),
 	SOC_SINGLE("AK4490 DSD Mute Release", AK4490_06_CONTROL5, 3, 1, 0),
@@ -947,6 +959,55 @@ static int ak4490_set_dai_mute(struct snd_soc_dai *dai, int mute)
 				return ret;
 				}
 		ak4490->akm_hifi_switch = 0;
+#ifdef CONFIG_SND_SOC_AK4490_CUSTOM_DRIVER
+                switch (selected_filter) {
+		case 1:
+			ret = snd_soc_read(codec, AK4490_02_CONTROL3); // slow bit
+                        ret |= 1 << 0;
+                        snd_soc_write(codec, AK4490_02_CONTROL3, ret);
+                        ret = snd_soc_read(codec, AK4490_01_CONTROL2); // sd bit
+                        ret &= ~(1 << 5);
+                        snd_soc_write(codec, AK4490_01_CONTROL2, ret);
+			break;
+		case 2:
+			ret = snd_soc_read(codec, AK4490_02_CONTROL3);
+                        ret &= ~(1 << 0);
+                        snd_soc_write(codec, AK4490_02_CONTROL3, ret);
+                        ret = snd_soc_read(codec, AK4490_01_CONTROL2);
+                        ret |= 1 << 5;
+                        snd_soc_write(codec, AK4490_01_CONTROL2, ret);
+			break;
+		case 3:
+			ret = snd_soc_read(codec, AK4490_02_CONTROL3);
+                        ret &= ~(1 << 0);
+                        snd_soc_write(codec, AK4490_02_CONTROL3, ret);
+                        ret = snd_soc_read(codec, AK4490_01_CONTROL2);
+                        ret &= ~(1 << 5);
+                        snd_soc_write(codec, AK4490_01_CONTROL2, ret);
+			break;
+		case 4:
+			ret = snd_soc_read(codec, AK4490_02_CONTROL3);
+                        ret |= 1 << 0;
+                        snd_soc_write(codec, AK4490_02_CONTROL3, ret);
+                        ret = snd_soc_read(codec, AK4490_01_CONTROL2);
+                        ret |= 1 << 5;
+                        snd_soc_write(codec, AK4490_01_CONTROL2, ret);
+			break;
+		default:
+			return -EINVAL;
+	}
+                if(superslow == 1) {
+                    ret = snd_soc_read(codec, AK4490_05_CONTROL4);
+                    ret |= 1 << 0;
+                    snd_soc_write(codec, AK4490_05_CONTROL4, ret);
+                }
+                if(superslow == 0) {
+                    ret = snd_soc_read(codec, AK4490_05_CONTROL4);
+                    ret &= ~(1 << 0);
+                    snd_soc_write(codec, AK4490_05_CONTROL4, ret);
+                    
+                }
+#endif
 		pr_err("[LHS]%s: isl54405_sel_gpio is 0 ,set to ak4490!\n",__func__);
 	}
 
@@ -958,7 +1019,7 @@ static int ak4490_set_dai_mute(struct snd_soc_dai *dai, int mute)
 				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |\
 				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |\
 				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |\
-				SNDRV_PCM_RATE_192000)  // | SNDRV_PCM_RATE_384000 | SNDRV_PCM_RATE_768000
+				SNDRV_PCM_RATE_192000) // | SNDRV_PCM_RATE_384000 | SNDRV_PCM_RATE_768000
 
 #define AK4490_FORMATS		SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE
 
@@ -1369,8 +1430,11 @@ static int ak4490_probe(struct snd_soc_codec *codec)
 //	ak4490_codec = codec;
 
 	ak4490_init_reg(codec);
-
+#ifdef CONFIG_SND_SOC_AK4490_CUSTOM_DRIVER
+        ak4490->fs1 = oversampling_freq;
+#else
 	ak4490->fs1 = 48000;
+#endif
 	ak4490->nBickFreq = 0;		
 	ak4490->nDSDSel = 0;
 	ak4490->akm_hifi_switch_mute=0;
