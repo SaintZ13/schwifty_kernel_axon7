@@ -4,5 +4,10 @@ config SND_SOC_AK4490
 	bool "AK4490"  
 	---help---
 	  Add ak4490 configuration
+	  
+config SND_SOC_AK4490_CUSTOM_DRIVER
+	bool "AK4490"  
+	---help---
+	  Custom AK4490 driver
 
 endmenu

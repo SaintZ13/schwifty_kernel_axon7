@@ -1,0 +1,16 @@
+Dont forget to add in defconfig 
+CONFIG_SND_SOC_AK4490_CUSTOM_DRIVER=y
+
+There are three files to control DAC:
+1) /sys/module/snd_soc_ak4490/parameters/oversampling_freq
+Sets DAC's oversampling frequency(default 768000)
+
+2) /sys/module/snd_soc_ak4490/parameters/selected_filter
+Sets DAC's filter:  1 slow
+                    2 short delay sharp
+                    3 sharp
+                    4 short delay slow (default)
+
+3) /sys/module/snd_soc_ak4490/parameters/superslow
+Sets state of Supperslow filter: 0 off (default)
+                                 1 on 
