@@ -43,26 +43,9 @@
 #include <linux/reboot.h>	/* zte add For kernel_power_off() */
 #include <soc/qcom/socinfo.h>
 #include <linux/pmic-voter.h>
-#include "oem_external_fg.h"
-#include <linux/type-c_notifier.h>
-#include <linux/wakelock.h>
-#include <linux/proc_fs.h>
 
 #ifdef CONFIG_FORCE_FAST_CHARGE
 #include <linux/fastchg.h>
-#endif
-
-#if defined(CONFIG_FB)
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#endif /*CONFIG_FB*/
-
-/* yangfb@BSP, 2016/09/14, store charger type record in PARAM */
-#ifdef PARAM_READY
-#include <linux/param_rw.h>
-#include <linux/timer.h>
-#include <linux/timex.h>
-#include <linux/rtc.h>
 #endif
 
 /* Mask/Bit helpers */
