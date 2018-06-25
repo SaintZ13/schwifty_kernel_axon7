@@ -52,10 +52,7 @@ static int sg_version_num = 30536;	/* 2 digits for each component */
 #include <linux/atomic.h>
 #include <linux/ratelimit.h>
 #include <linux/sizes.h>
-<<<<<<< HEAD
 #include <linux/cred.h> /* for sg_check_file_access() */
-=======
->>>>>>> a5efa51a8972... scsi: sg: only check for dxfer_len greater than 256M
 
 #include "scsi.h"
 #include <scsi/scsi_dbg.h>
@@ -825,10 +822,7 @@ sg_common_write(Sg_fd * sfp, Sg_request * srp,
 			(int) cmnd[0], (int) hp->cmd_len));
 
 	if (hp->dxfer_len >= SZ_256M)
-<<<<<<< HEAD
 	if (!sg_is_valid_dxfer(hp))
-=======
->>>>>>> a5efa51a8972... scsi: sg: only check for dxfer_len greater than 256M
 		return -EINVAL;
 
 	k = sg_start_req(srp, cmnd);
