@@ -387,6 +387,7 @@ extern int tcp_use_userconfig_sysctl_handler(struct ctl_table *, int,
 extern int tcp_proc_delayed_ack_control(struct ctl_table *, int,
 				void __user *, size_t *, loff_t *);
 
+void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks);
 static inline void tcp_dec_quickack_mode(struct sock *sk,
 					 const unsigned int pkts)
 {
@@ -676,11 +677,14 @@ u32 __tcp_select_window(struct sock *sk);
 
 void tcp_send_window_probe(struct sock *sk);
 
-/* TCP timestamps are only 32-bits, this causes a slight
- * complication on 64-bit systems since we store a snapshot
- * of jiffies in the buffer control blocks below.  We decided
- * to use only the low 32-bits of jiffies and hide the ugly
- * casts with the following macro.
+/* TCP uses 32bit jiffies to save some space.
+ * Note that this is different from tcp_time_stamp, which
+ * historically has been the same until linux-4.13.
+ */
+#define tcp_jiffies32 ((u32)jiffies)
+
+/* Generator for TCP TS option (RFC 7323)
+ * Currently tied to 'jiffies' but will soon be driven by 1 ms clock.
  */
 #define tcp_time_stamp		((__u32)(jiffies))
 
@@ -1232,7 +1236,6 @@ static inline bool tcp_paws_reject(const struct tcp_options_received *rx_opt,
 	   Actually, the problem would be not existing if all
 	   the implementations followed draft about maintaining clock
 	   via reboots. Linux-2.2 DOES NOT!
-
 	   However, we can relax time bounds for RST segments to MSL.
 	 */
 	if (rst && get_seconds() >= rx_opt->ts_recent_stamp + TCP_PAWS_MSL)
