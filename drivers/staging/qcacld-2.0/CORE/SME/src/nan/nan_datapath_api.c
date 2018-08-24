@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -474,7 +474,8 @@ eHalStatus csr_process_ndp_initiator_request(tpAniSirGlobal mac_ctx,
 
 	if (NULL == cmd) {
 		smsLog(mac_ctx, LOGE, FL("Invalid req_params"));
-		return eHAL_STATUS_INVALID_PARAMETER;
+		status = eHAL_STATUS_INVALID_PARAMETER;
+		goto sme_initiator_req_failed;
 	}
 	req = &cmd->u.initiator_req;
 

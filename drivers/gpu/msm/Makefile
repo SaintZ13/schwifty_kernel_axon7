@@ -27,18 +27,14 @@ msm_adreno-y += \
 	adreno_snapshot.o \
 	adreno_coresight.o \
 	adreno_trace.o \
-	adreno_a3xx.o \
-	adreno_a4xx.o \
-	adreno_a5xx.o \
-	adreno_a3xx_snapshot.o \
-	adreno_a4xx_snapshot.o \
-	adreno_a5xx_snapshot.o \
-	adreno_a4xx_preempt.o \
-	adreno_a5xx_preempt.o \
 	adreno_sysfs.o \
 	adreno.o \
 	adreno_cp_parser.o \
 	adreno_perfcounter.o
+	
+msm_adreno-$(CONFIG_ARCH_MSM8996) += adreno_a5xx.o adreno_a5xx_snapshot.o adreno_a5xx_preempt.o
+msm_adreno-$(CONFIG_ARCH_MSMCOBALT) += adreno_a5xx.o adreno_a5xx_snapshot.o adreno_a5xx_preempt.o
+msm_adreno-$(CONFIG_ARCH_SDM450) += adreno_a5xx.o adreno_a5xx_snapshot.o adreno_a5xx_preempt.o
 
 msm_adreno-$(CONFIG_MSM_KGSL_IOMMU) += adreno_iommu.o
 msm_adreno-$(CONFIG_DEBUG_FS) += adreno_debugfs.o adreno_profile.o

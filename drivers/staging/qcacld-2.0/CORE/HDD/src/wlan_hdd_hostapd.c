@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -96,10 +96,6 @@ extern int process_wma_set_command(int sessid, int paramid,
 #include <wlan_hdd_wowl.h>
 #include "wlan_hdd_tsf.h"
 #include "wlan_hdd_oemdata.h"
-
-#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-#include <vos_utils.h>
-#endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 
 #define    IS_UP(_dev) \
     (((_dev)->flags & (IFF_RUNNING|IFF_UP)) == (IFF_RUNNING|IFF_UP))
@@ -1133,46 +1129,6 @@ void hdd_hostapd_inactivity_timer_cb(v_PVOID_t usrDataForCallback)
     EXIT();
 }
 
-#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-//This function runs in the timer context of hdd_ap_chan_switch_timer.
-void hdd_hostapd_chan_switch_cb(v_PVOID_t usrDataForCallback)
-{
-    hdd_adapter_t   *pHostapdAdapter = NULL;
-    hdd_context_t   *pHddCtx = NULL;
-    int             ret = 0;
-
-    ENTER();
-
-    if(usrDataForCallback)
-    {
-        pHostapdAdapter = (struct hdd_adapter_s *)usrDataForCallback;
-    }
-    else
-    {
-        hddLog(LOGE, FL("hdd_hostapd_chan_switch_cb NULL cb pointer!!\n"));
-                EXIT();
-        return;
-    }
-    pHddCtx = WLAN_HDD_GET_CTX(pHostapdAdapter);
-
-    mutex_lock(&pHddCtx->ch_switch_ctx.sap_ch_sw_lock);
-    if(pHddCtx->ch_switch_ctx.sap_chan_sw_pending)
-    {
-        vos_ssr_protect(__func__);
-        ret = hdd_softap_set_channel_change(pHostapdAdapter->dev, pHddCtx->ch_switch_ctx.def_csa_channel_on_disc);
-        vos_ssr_unprotect(__func__);
-        if (ret)
-        {
-            hddLog(LOGE, FL("hdd_softap_set_channel_change failed!!"));
-        }
-        pHddCtx->ch_switch_ctx.sap_chan_sw_pending = 0;
-    }
-    mutex_unlock(&pHddCtx->ch_switch_ctx.sap_ch_sw_lock);
-
-    EXIT();
-}
-#endif //#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-
 static VOS_STATUS
 hdd_change_mcc_go_beacon_interval(hdd_adapter_t *pHostapdAdapter)
 {
@@ -1551,218 +1507,6 @@ VOS_STATUS hdd_chan_change_notify(hdd_adapter_t *hostapd_adapter,
 	return VOS_STATUS_SUCCESS;
 }
 
-#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-VOS_STATUS hdd_send_sap_event(struct net_device *dev,
-                sta_sap_notifications event,
-                struct wlan_sap_csa_info csa_info,
-                struct wireless_dev *wdev)
-{
-    uint32_t freq = 0, ret;
-
-    hdd_wlan_get_freq(csa_info.sta_channel, &freq);
-
-    hddLog(LOG1, FL(" Set Freq %d Chan= %d"), freq, csa_info.sta_channel );
-
-    vos_ssr_protect(__func__);
-    ret = hdd_softap_set_channel_change(dev, csa_info.sta_channel);
-    vos_ssr_unprotect(__func__);
-
-    return ret;
-}
-
-VOS_STATUS hdd_sta_state_sap_notify(hdd_context_t *hdd_context,
-                                sta_sap_notifications event,
-                                struct wlan_sap_csa_info csa_info)
-{
-    /* Get the HostApd Adapter. If present proceed further.
-     * Check the current state of SAP. If its in active state, get the channel in which it is running.
-     * Verify the channel and band. Based on the event type, take a decision.
-     * If it is a disconnection event and SAP is running in 2.4 band channel, no action should be taken.
-     * If its a connection event and SAP needs to do a CSA to the HomeAP channel.
-     */
-
-    hdd_adapter_t *pHostapdAdapter = NULL;
-    hdd_ap_ctx_t *pHddApCtx = NULL;
-    hdd_hostapd_state_t *pHostapdState = NULL;
-    VOS_STATUS status = VOS_STATUS_SUCCESS;
-    tsap_Config_t *sap_config;
-    uint32_t ret = 0;
-
-    hddLog(LOGE, FL("%s Entry event = %d channel = %d"),
-                        __func__, event, csa_info.sta_channel);
-
-    if (!hdd_context) {
-        hddLog(LOGE, FL("HDD context is NULL"));
-                return VOS_STATUS_E_FAILURE;
-    }
-
-    ret = wlan_hdd_validate_context(hdd_context);
-
-    if (ret != 0) {
-
-        hddLog(LOGE, FL("%s Failed in hdd_validate_context ret=%d"), __func__, ret);
-        return ret;
-    }
-
-    /*Get the Adapter of SAP*/
-    pHostapdAdapter = hdd_get_adapter(hdd_context, WLAN_HDD_SOFTAP);
-
-    if(!pHostapdAdapter)
-    {
-        hddLog(LOGE, FL("Hostapd adapter context is NULL"));
-        return VOS_STATUS_E_FAILURE;
-    }
-
-    pHddApCtx = WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter);
-
-    pHostapdState = WLAN_HDD_GET_HOSTAP_STATE_PTR(pHostapdAdapter);
-
-    /*Verify the state*/
-    if(pHostapdState->vosStatus != VOS_STATUS_SUCCESS ||
-            pHostapdState->bssState != BSS_START)
-    {
-        hddLog(LOGE, FL("Invalid HostApd State vosStatus=%d bssState=%d"),
-                    pHostapdState->vosStatus, pHostapdState->bssState);
-        return VOS_STATUS_E_FAILURE;
-    }
-
-    switch(event)
-    {
-        case STA_NOTIFY_DISCONNECTED:
-            {
-                /* check for the operating channel
-                 * If operating in 2.4, just ignore and return
-                 * else start ACS & find the strongest signal channel and do initiate CSA to that channel.
-                 */
-                if((pHddApCtx->operatingChannel >= 1 && pHddApCtx->operatingChannel <= 14))
-                {
-                    hddLog(LOGE, FL("Hostapd is operating in 2.4Band Channel=%d, Avoid channel switch"),
-                                        pHddApCtx->operatingChannel);
-                }
-                else
-                {
-		    sap_config = &((WLAN_HDD_GET_AP_CTX_PTR(pHostapdAdapter))->sapConfig);
-		    if (VOS_IS_DFS_CH(pHddApCtx->operatingChannel) &&
-				( VOS_IS_DFS_CH(sap_config->channel) ||
-					(sap_config->channel == AUTO_CHANNEL_SELECT) )){
-			hddLog(LOGE, FL("SAP CUR CH %d(DFS) Hostapd Conf CH=%d(%s) Switch to CH %d"),
-					pHddApCtx->operatingChannel, pHddApCtx->operatingChannel,
-				        (sap_config->channel == AUTO_CHANNEL_SELECT)?"AUTO":"DFS", 36);
-                        hdd_context->ch_switch_ctx.def_csa_channel_on_disc = 36;
-		    }else if (VOS_IS_DFS_CH(pHddApCtx->operatingChannel) &&
-				!VOS_IS_DFS_CH(sap_config->channel)){
-			hddLog(LOGE, FL("SAP CUR CH %d(DFS) Hostapd Conf CH=%d(Non-DFS) Switch to %d"),
-					pHddApCtx->operatingChannel, sap_config->channel, sap_config->channel);
-			hdd_context->ch_switch_ctx.def_csa_channel_on_disc = sap_config->channel; //channel from the hostapd
-		    }else{
-			    hddLog(LOGE, FL("SAP is operating in 5Ghz Band Non DFS Channel=%d, Avoid channel switch"),
-					    pHddApCtx->operatingChannel);
-			    return status;
-		    }
-		    mutex_lock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-		    hdd_context->ch_switch_ctx.sap_chan_sw_pending = 1;
-		    mutex_unlock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-
-		    //Set the timer to initiate channel switch
-		    if(hdd_context->ch_switch_ctx.chan_sw_timer_initialized == VOS_TRUE)
-		    {
-			    status = vos_timer_start(&hdd_context->ch_switch_ctx.hdd_ap_chan_switch_timer, 10000);
-			    if(!VOS_IS_STATUS_SUCCESS(status))
-			    {
-				    hddLog(LOGE, FL("Failed to start AP channel switch timer!!"));
-				    break;
-			    }
-		    }
-		}
-	    }
-	    break;
-	case STA_NOTIFY_CONNECTED:
-	    {
-		    //stop the channel switch timer first
-		    if (hdd_context->ch_switch_ctx.hdd_ap_chan_switch_timer.state == VOS_TIMER_STATE_RUNNING)
-		    {
-			    status = vos_timer_stop(&hdd_context->ch_switch_ctx.hdd_ap_chan_switch_timer);
-			    if(!VOS_IS_STATUS_SUCCESS(status))
-			    {
-				    hddLog(LOGE, FL("Failed to stop AP channel switch timer!!"));
-				    break;
-			    }
-		    }
-		    if(pHddApCtx->operatingChannel != csa_info.sta_channel)
-		    {
-			    mutex_lock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-			    hddLog(LOGE, FL("Switching Hostapd to Station channel %d"), csa_info.sta_channel);
-			    status = hdd_send_sap_event(pHostapdAdapter->dev,
-					    event,
-					    csa_info,
-					    &pHostapdAdapter->wdev);
-			    if(!VOS_IS_STATUS_SUCCESS(status))
-			    {
-				    hddLog(LOGE, FL("Failed to send channel switch event!!"));
-				    mutex_unlock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-				    break;
-			    }
-			    hdd_context->ch_switch_ctx.sap_chan_sw_pending = 0;
-			    mutex_unlock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-		    }
-		    else
-		    {
-			    hddLog(LOGE, FL("Hostapd and Sta are operating in same channel : %d\n"),
-					    pHddApCtx->operatingChannel);
-		    }
-	    }
-	    break;
-	case STA_NOTIFY_CSA:
-	    {
-		    mutex_lock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-		    if(pHddApCtx->operatingChannel != csa_info.sta_channel)
-		    {
-			    if(!(hdd_context->ch_switch_ctx.is_ch_sw_through_sta_csa &&
-						    hdd_context->ch_switch_ctx.csa_to_channel == csa_info.sta_channel))
-			    {
-				    hdd_context->ch_switch_ctx.is_ch_sw_through_sta_csa = VOS_TRUE;
-
-				    hddLog(LOGE, FL("Switching Hostapd to Station channel %d"), csa_info.sta_channel);
-				    status = hdd_send_sap_event(pHostapdAdapter->dev,
-						    event,
-						    csa_info,
-						    &pHostapdAdapter->wdev);
-				    if(!VOS_IS_STATUS_SUCCESS(status))
-				    {
-					    hddLog(LOGE, FL("Failed to send channel switch event!!"));
-					    mutex_unlock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-					    break;
-				    }
-
-				    hdd_context->ch_switch_ctx.csa_to_channel = csa_info.sta_channel;
-			    }
-			    else
-			    {
-				    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-						    "%s : CSA Sta interface for Channel %d is already notified",
-						    __func__, csa_info.sta_channel);
-			    }
-		    }
-		    else
-		    {
-			    hddLog(LOGE, FL("Hostapd and Sta are operating in same channel : %d\n"),
-					    pHddApCtx->operatingChannel);
-		    }
-		    mutex_unlock(&hdd_context->ch_switch_ctx.sap_ch_sw_lock);
-	    }
-	    break;
-	default:
-	    {
-		    hddLog(LOGE, FL("%s Invalid event %d"), __func__, event);
-	    }
-	    break;
-    }
-
-    hddLog(LOGE, FL("%s Exit ret = %d"), __func__, status);
-
-    return status;
-}
-#endif //#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
 /**
  * hdd_send_radar_event() - Function to send radar events to user space
  * @hdd_context:	HDD context
@@ -2440,19 +2184,6 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
             we_event = IWEVCUSTOM;
             we_custom_event_generic = we_custom_start_event;
             hdd_dump_concurrency_info(pHddCtx);
-#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
-            if(pHostapdAdapter->device_mode == WLAN_HDD_SOFTAP)
-	    {
-		    mutex_lock(&pHddCtx->ch_switch_ctx.sap_ch_sw_lock);
-		    if(pHddCtx->ch_switch_ctx.is_ch_sw_through_sta_csa &&
-				    (pHddApCtx->operatingChannel == pHddCtx->ch_switch_ctx.csa_to_channel)){
-			    hddLog(LOG1, FL("Successfully Channel Switch is done to CH = %d"),
-					    pHddApCtx->operatingChannel);
-			    pHddCtx->ch_switch_ctx.is_ch_sw_through_sta_csa = VOS_FALSE;
-		    }
-		    mutex_unlock(&pHddCtx->ch_switch_ctx.sap_ch_sw_lock);
-	    }
-#endif//#ifdef WLAN_FEATURE_SAP_TO_FOLLOW_STA_CHAN
             break; //Event will be sent after Switch-Case stmt
 
         case eSAP_STOP_BSS_EVENT:
@@ -2688,10 +2419,11 @@ VOS_STATUS hdd_hostapd_SAPEventCB( tpSap_Event pSapEvent, v_PVOID_t usrDataForCa
                 staId = event->staId;
                 hdd_fill_station_info(&pHostapdAdapter->aStaInfo[staId],
                                       event);
-                pHostapdAdapter->aStaInfo[staId].ecsa_capable =
-                    pSapEvent->
-                    sapevt.sapStationAssocReassocCompleteEvent.ecsa_capable;
             }
+
+            pHostapdAdapter->aStaInfo[staId].ecsa_capable =
+                pSapEvent->
+                sapevt.sapStationAssocReassocCompleteEvent.ecsa_capable;
 
 #ifdef IPA_OFFLOAD
             if (hdd_ipa_is_enabled(pHddCtx))
@@ -3563,52 +3295,40 @@ static __iw_softap_set_ini_cfg(struct net_device *dev,
                           union iwreq_data *wrqu, char *extra)
 {
     VOS_STATUS vstatus;
-    int errno;
-    hdd_adapter_t *adapter;
-    hdd_context_t *hdd_ctx;
-    char *value;
-    size_t len;
+    int ret = 0; /* success */
+    hdd_adapter_t *pAdapter = (netdev_priv(dev));
+    hdd_context_t *pHddCtx;
 
-    ENTER();
-
-    adapter = netdev_priv(dev);
-    if (adapter == NULL)
+    if (pAdapter == NULL)
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                                        "%s: adapter is NULL!", __func__);
+                                        "%s: pAdapter is NULL!", __func__);
         return -EINVAL;
     }
 
-    hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-    errno = wlan_hdd_validate_context(hdd_ctx);
-    if (errno != 0)
-        return errno;
+    pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
+    ret = wlan_hdd_validate_context(pHddCtx);
+    if (ret != 0)
+        return ret;
 
-    /* ensure null termination */
-    len = min_t(size_t, wrqu->data.length, QCSAP_IOCTL_MAX_STR_LEN);
-    value = vos_mem_malloc(len + 1);
-    if (!value)
-        return -ENOMEM;
-
-    vos_mem_copy(value, extra, len);
-    value[len] = '\0';
     VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-              "%s: Received data %s", __func__, value);
+              "%s: Received data %s", __func__, extra);
 
-    vstatus = hdd_execute_global_config_command(hdd_ctx, value);
+    vstatus = hdd_execute_global_config_command(pHddCtx, extra);
 #ifdef WLAN_FEATURE_MBSSID
     if (vstatus == VOS_STATUS_E_PERM) {
-        vstatus = hdd_execute_sap_dyn_config_command(adapter, value);
+        vstatus = hdd_execute_sap_dyn_config_command(pAdapter, extra);
         if (vstatus == VOS_STATUS_SUCCESS)
             VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                    "%s: Stored in Dynamic SAP ini config", __func__);
     }
 #endif
-    vos_mem_free(value);
+    if (VOS_STATUS_SUCCESS != vstatus)
+    {
+        ret = -EINVAL;
+    }
 
-    EXIT();
-
-    return vos_status_to_os_return(vstatus);
+    return ret;
 }
 
 int
@@ -4603,13 +4323,6 @@ static __iw_softap_setparam(struct net_device *dev,
                                    set_value, PDEV_CMD);
             break;
 
-        case QCSAP_ENABLE_DYNAMIC_BW:
-           hddLog(LOG1, "QCSAP_ENABLE_DYNAMIC_BW val %d", set_value);
-           ret = process_wma_set_command((int)pHostapdAdapter->sessionId,
-                                         (int)WMI_PDEV_PARAM_DYNAMIC_BW,
-                                         set_value, PDEV_CMD);
-            break;
-
         default:
             hddLog(LOGE, FL("Invalid setparam command %d value %d"),
                     sub_cmd, set_value);
@@ -4888,14 +4601,6 @@ static __iw_softap_getparam(struct net_device *dev,
                         (int)pHostapdAdapter->sessionId,
                         (int)WMI_VDEV_PARAM_NSS,
                         VDEV_CMD);
-            break;
-        }
-    case QCSAP_GET_DYNAMIC_BW:
-        {
-            *value = wma_cli_get_command(pHddCtx->pvosContext,
-                                        (int)pHostapdAdapter->sessionId,
-                                        (int)WMI_PDEV_PARAM_DYNAMIC_BW,
-                                        PDEV_CMD);
             break;
         }
     case QCASAP_GET_TEMP_CMD:
@@ -5897,7 +5602,7 @@ static int __iw_set_ap_encodeext(struct net_device *dev,
          /*Convert from 1-based to 0-based keying*/
         key_index--;
     }
-    if(!ext->key_len || ext->key_len > CSR_MAX_KEY_LEN) {
+    if(!ext->key_len) {
 #if 0
       /*Set the encryption type to NONE*/
 #if 0
@@ -5948,7 +5653,7 @@ static int __iw_set_ap_encodeext(struct net_device *dev,
              retval = -EINVAL;
          }
 #endif
-         return -EINVAL;
+         return ret;
 
     }
 
@@ -5957,7 +5662,9 @@ static int __iw_set_ap_encodeext(struct net_device *dev,
     setKey.keyId = key_index;
     setKey.keyLength = ext->key_len;
 
-    vos_mem_copy(&setKey.Key[0],ext->key,ext->key_len);
+    if(ext->key_len <= CSR_MAX_KEY_LEN) {
+       vos_mem_copy(&setKey.Key[0],ext->key,ext->key_len);
+    }
 
     if(ext->ext_flags & IW_ENCODE_EXT_GROUP_KEY) {
       /*Key direction for group is RX only*/
@@ -7395,12 +7102,6 @@ static const struct iw_priv_args hostapd_private_args[] = {
         0,
         "rts_bursting" },
 
-    {   QCSAP_ENABLE_DYNAMIC_BW,
-        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
-        0,
-        "cwmenable" },
-
-
   { QCSAP_IOCTL_GETPARAM, 0,
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,    "getparam" },
   { QCSAP_IOCTL_GETPARAM, 0,
@@ -7457,8 +7158,6 @@ static const struct iw_priv_args hostapd_private_args[] = {
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,    "get_txchainmask" },
   { QCASAP_RX_CHAINMASK_CMD, 0,
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,    "get_rxchainmask" },
-  { QCSAP_GET_DYNAMIC_BW, 0,
-      IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,    "get_cwmenable" },
   { QCASAP_NSS_CMD, 0,
       IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,    "get_nss" },
   { QCASAP_GET_TEMP_CMD, 0,

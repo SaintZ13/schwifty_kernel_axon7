@@ -121,6 +121,13 @@ extern void __init_kthread_worker(struct kthread_worker *worker,
 		INIT_LIST_HEAD(&(work)->node);				\
 		(work)->func = (fn);					\
 	} while (0)
+        
+static inline bool queuing_blocked(struct kthread_worker *worker,
+				   struct kthread_work *work)
+{
+	lockdep_assert_held(&worker->lock);
+ 	return !list_empty(&work->node);
+}
 
 int kthread_worker_fn(void *worker_ptr);
 

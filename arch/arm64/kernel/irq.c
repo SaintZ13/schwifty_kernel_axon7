@@ -90,6 +90,7 @@ void migrate_irqs(void)
 
 	local_irq_save(flags);
 
+#if 0
 	for_each_irq_desc(i, desc) {
 		bool affinity_broken;
 
@@ -101,6 +102,13 @@ void migrate_irqs(void)
 			pr_debug("IRQ%u no longer affine to CPU%u\n",
 					    i, smp_processor_id());
 	}
+#else
+	for_each_irq_desc(i, desc) {
+		raw_spin_lock(&desc->lock);
+		migrate_one_irq(desc);
+		raw_spin_unlock(&desc->lock);
+	}
+#endif
 
 	local_irq_restore(flags);
 }

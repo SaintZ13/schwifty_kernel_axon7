@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -958,6 +958,7 @@ tSirRetStatus peOpen(tpAniSirGlobal pMac, tMacOpenParameters *pMacOpenParam)
         status = eSIR_FAILURE;
         goto pe_open_lock_fail;
     }
+    pMac->lim.deauthMsgCnt = 0;
     pMac->lim.retry_packet_cnt = 0;
     pMac->lim.gLimIbssRetryCnt = 0;
 
@@ -968,8 +969,8 @@ tSirRetStatus peOpen(tpAniSirGlobal pMac, tMacOpenParameters *pMacOpenParam)
      */
 #ifdef LIM_TRACE_RECORD
     MTRACE(limTraceInit(pMac));
-#endif
     lim_register_debug_callback();
+#endif
 
     return status; /* status here will be eSIR_SUCCESS */
 

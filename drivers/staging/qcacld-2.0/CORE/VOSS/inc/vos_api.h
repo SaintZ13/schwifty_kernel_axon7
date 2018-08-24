@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -357,9 +357,12 @@ static inline bool vos_is_ptp_tx_opt_enabled(void)
 #endif
 
 #ifdef WLAN_FEATURE_DSRC
-bool vos_is_ocb_tx_per_pkt_stats_enabled(void);
+static inline bool vos_is_ocb_per_pkt_tx_comp_msg_needed(void)
+{
+	return true;
+}
 #else
-static inline bool vos_is_ocb_tx_per_pkt_stats_enabled(void)
+static inline bool vos_is_ocb_per_pkt_tx_comp_msg_needed(void)
 {
 	return false;
 }
@@ -430,12 +433,5 @@ uint64_t vos_do_div64(uint64_t dividend, uint64_t divisor);
 VOS_STATUS vos_force_fw_dump(void);
 
 bool vos_is_probe_rsp_offload_enabled(void);
-/**
- * vos_is_mon_enable - API to check if moniotr mode is on now.
- *
- * return - false: monitor mode is off
- *          true: monitor mode is on
- */
-bool vos_is_mon_enable(void);
-v_BOOL_t vos_is_ch_switch_with_csa_enabled(void);
+
 #endif // if !defined __VOS_API_H

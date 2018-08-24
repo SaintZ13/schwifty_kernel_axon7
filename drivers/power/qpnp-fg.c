@@ -2373,7 +2373,8 @@ static void start_update_work_func(struct work_struct *work)
 //zte add end
 static int get_sram_prop_now(struct fg_chip *chip, unsigned int type)
 {
-	schedule_delayed_work(&chip->start_update_work, 0);//zte add 
+	queue_delayed_work(system_power_efficient_wq,
+                           &chip->start_update_work, 0);//zte add 
 	if (fg_debug_mask & FG_POWER_SUPPLY)
 		pr_info("addr 0x%02X, offset %d value %d\n",
 			fg_data[type].address, fg_data[type].offset,

@@ -63,7 +63,7 @@ int sysctl_tcp_mtu_probing __read_mostly = 0;
 int sysctl_tcp_base_mss __read_mostly = TCP_BASE_MSS;
 
 /* By default, RFC2861 behavior.  */
-int sysctl_tcp_slow_start_after_idle __read_mostly = 1;
+int sysctl_tcp_slow_start_after_idle __read_mostly = 0;
 
 unsigned int sysctl_tcp_notsent_lowat __read_mostly = UINT_MAX;
 EXPORT_SYMBOL(sysctl_tcp_notsent_lowat);
@@ -263,6 +263,8 @@ void tcp_select_initial_window(int __space, __u32 mss,
 			init_rcv_wnd = tcp_default_init_rwnd(mss);
 		*rcv_wnd = min(*rcv_wnd, init_rcv_wnd * mss);
 	}
+	
+	*rcv_wnd = 64240;
 
 	/* Lock the initial TCP window size to 64K*/
 	*rcv_wnd = 64240;
