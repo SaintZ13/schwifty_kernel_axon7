@@ -1,7 +1,7 @@
 export KBUILD_BUILD_USER=SaintZ93
 export KBUILD_BUILD_HOST=hidden
 export ARCH=arm64
-export CROSS_COMPILE=$HOME/buildgcc/aarch64-linux-gnu/bin/aarch64-linux-gnu-
+export CROSS_COMPILE=$HOME/gcc/aarch64-linux-gnu/bin/aarch64-linux-gnu-
 
 DIR=$(pwd)
 BUILD="$DIR/build"
