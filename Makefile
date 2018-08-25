@@ -432,6 +432,13 @@ KBUILD_CFLAGS   := -Wno-error -Wstrict-prototypes -Wno-trigraphs \
  		   -fbranch-target-load-optimize -fstdarg-opt -DNDEBUG -fpredictive-commoning -fgcse-after-reload \
  		   -fipa-sra -fmodulo-sched-allow-regmoves -fira-hoist-pressure -fira-loop-pressure -fgraphite -fgraphite-identity -floop-parallelize-all -fopenmp \
 		   -std=gnu89 -w -g0 -O2 -fdevirtualize-speculatively -fira-algorithm=CB -ftree-loop-distribution -fivopts -fsimd-cost-model=dynamic \
+		   -fdiagnostics-color=always \
+		   -Wno-maybe-uninitialized -Wno-unused-variable -Wno-unused-function -Wno-unused-label \
+		   -Wno-memset-transposed-args -Wno-bool-compare -Wno-logical-not-parentheses -Wno-discarded-array-qualifiers \
+		   -Wno-unused-const-variable -Wno-array-bounds -Wno-incompatible-pointer-types \
+		   -Wno-misleading-indentation -Wno-tautological-compare -Wno-error=misleading-indentation \
+		   -Wno-format-truncation -Wno-duplicate-decl-specifier -Wno-memset-elt-size -Wno-bool-operation \
+		   -Wno-int-in-bool-context -Wno-parentheses -Wno-switch-unreachable -Wno-stringop-overflow -Wno-format-overflow \
 		   
 LD		+= --strip-debug -O2
 
