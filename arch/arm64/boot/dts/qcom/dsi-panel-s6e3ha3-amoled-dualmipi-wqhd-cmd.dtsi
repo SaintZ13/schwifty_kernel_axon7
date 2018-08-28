@@ -141,5 +141,34 @@
 		qcom,mdss-pan-physical-width-dimension = <68>;
 		qcom,mdss-pan-physical-height-dimension = <122>;
 		qcom,mdss-dsi-reset-sequence = <1 10>, <0 10>, <1 10>;
+		];	
+		qcom,mdss-dsi-lp-mode-on = [
+			29 01 00 00 00 00 03 F0 5A 5A
+			29 01 00 00 00 00 03 F0 5A 5A
+			29 01 00 00 00 00 02 B0 0D
+			29 01 00 00 00 00 02 B1 08
+			29 01 00 00 00 00 02 B0 08
+			29 01 00 00 00 00 03 B1 30 56
+			29 01 00 00 00 00 42 CB 10 01 80 00 00 80 60 00 00 06 05 00 00 00 00 0D 00 15 9A 00 00 00 00 10 00 00 00 00 9D 00 00 CA 0A 0A 03 C5 84 CA 0A 0A 0A CA CA CF D1 CD C3 C5 C4 0A 0A 0A 0A 0A 0A 00 00 0C 01 7B 4D 00 00 10 00
+			29 01 00 00 00 00 02 51 50
+			29 01 00 00 00 00 02 51 50
+			29 01 00 00 00 00 02 F7 03
+			29 01 00 00 00 00 03 F0 A5 A5
+		];
+		qcom,mdss-dsi-lp-mode-off = [
+			29 01 00 00 00 00 03 F0 5A 5A
+			29 01 00 00 00 00 03 F0 5A 5A
+			29 01 00 00 00 00 02 B0 0D
+			29 01 00 00 00 00 02 B1 80
+			29 01 00 00 00 00 02 B0 08
+			29 01 00 00 00 00 03 B1 20 03
+			29 01 00 00 00 00 42 CB 10 01 80 00 00 80 60 00 00 06 05 00 00 00 06 05 00 15 9A 00 00 00 00 04 00 00 00 00 9D 00 00 CA 0A 0A 03 C5 84 CA 0A 0A 0A CA CA CF D1 4D C3 C5 C4 0A 0A 0A 0A 0A 0A 00 00 0A 01 7B 4D 00 00 08 00
+			29 01 00 00 00 00 02 F7 03
+			29 01 00 00 00 00 02 F7 03
+			29 01 00 00 00 00 03 F0 A5 A5
+		];
+		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
+		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
+		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 	};
 };
