@@ -141,7 +141,7 @@
 		qcom,mdss-pan-physical-width-dimension = <68>;
 		qcom,mdss-pan-physical-height-dimension = <122>;
 		qcom,mdss-dsi-reset-sequence = <1 10>, <0 10>, <1 10>;
-		];	
+	
 		qcom,mdss-dsi-lp-mode-on = [
 			29 01 00 00 00 00 03 F0 5A 5A
 			29 01 00 00 00 00 03 F0 5A 5A
@@ -167,8 +167,5 @@
 			29 01 00 00 00 00 02 F7 03
 			29 01 00 00 00 00 03 F0 A5 A5
 		];
-		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
-		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
-		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 	};
 };

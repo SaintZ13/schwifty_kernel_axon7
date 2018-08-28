@@ -167,7 +167,7 @@
 			[23 00 00 00 00 00 02 b0 00
 			29 00 00 00 00 00 02 b3 1c
 			23 01 00 00 00 00 02 b0 03];
-		];	
+	
 		qcom,mdss-dsi-lp-mode-on = [
 			29 01 00 00 00 00 03 F0 5A 5A
 			29 01 00 00 00 00 03 F0 5A 5A
@@ -193,8 +193,5 @@
 			29 01 00 00 00 00 02 F7 03
 			29 01 00 00 00 00 03 F0 A5 A5
 		];
-		qcom,mdss-dsi-on-command-state = "dsi_lp_mode";
-		qcom,mdss-dsi-off-command-state = "dsi_hs_mode";
-		qcom,mdss-dsi-default-command-state = "dsi_hs_mode";
 	};
 };
