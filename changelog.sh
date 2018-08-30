@@ -24,7 +24,7 @@ blink=$(tput blink)             # blink
 # variables
 rdir=`pwd`
 CURRENT_DATE=`date +%Y%m%d`
-LAST_DATE=`date +%s -d "5 day ago"`
+LAST_DATE=`date +%s -d "2 day ago"`
 CUSTOM_DATE="$1"
 
 clear
