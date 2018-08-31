@@ -1,4 +1,4 @@
-CONFIG_LOCALVERSION="-Schwifty-Kernel-Axon7-vR3"
+CONFIG_LOCALVERSION="-Schwifty-Kernel-Axon7-vR4"
 # CONFIG_LOCALVERSION_AUTO is not set
 # CONFIG_USELIB is not set
 CONFIG_AUDIT=y
