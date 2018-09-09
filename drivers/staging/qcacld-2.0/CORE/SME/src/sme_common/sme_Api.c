@@ -9795,10 +9795,7 @@ eHalStatus sme_WakeReasonIndCallback (tHalHandle hHal, void* pMsg)
 eHalStatus sme_SetMaxTxPowerPerBand(eCsrBand band, v_S7_t dB,
                   tHalHandle hal)
 {
-<<<<<<< HEAD
-=======
 	vos_msg_t msg = {0};
->>>>>>> 292a4c92d50d... v1
 	eHalStatus status;
 	tSmeCmd *set_max_tx_pwr_per_band;
 	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
