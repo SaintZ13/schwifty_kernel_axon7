@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -1208,7 +1208,7 @@ static void ramdump_work_handler(struct work_struct *ramdump)
 
 	printk("%s: RAM dump collecting completed!\n", __func__);
 
-#if defined(HIF_SDIO) && !defined(CONFIG_CNSS)
+#if (defined(HIF_SDIO) || defined(CONFIG_NON_QC_PLATFORM_PCI)) && !defined(CONFIG_CNSS)
 	panic("CNSS Ram dump collected\n");
 #else
 	/* Notify SSR framework the target has crashed. */
@@ -1326,14 +1326,15 @@ void ol_ramdump_handler(struct ol_softc *scn)
 			return;
 		}
 
+		if (scn->enableFwSelfRecovery || scn->enableRamdumpCollection)
+			vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, TRUE);
+
 		reg = (A_UINT32 *) (data + 4);
 		print_hex_dump(KERN_DEBUG, " ", DUMP_PREFIX_OFFSET, 16, 4, reg,
 				min_t(A_UINT32, len - 4, FW_REG_DUMP_CNT * 4),
 				false);
 		scn->fw_ram_dumping = 0;
 
-		if (scn->enableFwSelfRecovery || scn->enableRamdumpCollection)
-			vos_set_logp_in_progress(VOS_MODULE_ID_VOSS, TRUE);
 	}
 	else if (pattern == FW_REG_PATTERN) {
 		reg = (A_UINT32 *) (data + 4);
@@ -2750,6 +2751,10 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 	uint32_t readLen = 0;
 	uint32_t max_count = ol_get_max_section_count(scn);
 
+#ifdef CONFIG_NON_QC_PLATFORM_PCI
+
+	char *fw_ram_seg_name[] = {"DRAM ", "AXI ", "REG ", "IRAM1 ", "IRAM2 "};
+#endif
 	while ((sectionCount < max_count) && (amountRead < blockLength)) {
 		switch (sectionCount) {
 		case 0:
@@ -2800,6 +2805,9 @@ int ol_target_coredump(void *inst, void *memoryBlock, u_int32_t blockLength)
 
 		pr_info("%s: Section:%d Bytes Read:%0x\n", __func__,
 			sectionCount, result);
+#ifdef CONFIG_NON_QC_PLATFORM_PCI
+		printk("\nMemory addr for %s = 0x%p (size: %x)\n",fw_ram_seg_name[sectionCount], bufferLoc, result);
+#endif
 		amountRead += result;
 		bufferLoc += result;
 		sectionCount++;
@@ -2919,7 +2927,7 @@ ol_sdio_extra_initialization(struct ol_softc *scn)
 			HI_ACS_FLAGS_ALT_DATA_CREDIT_SIZE);
 
 		if (!vos_is_ptp_tx_opt_enabled() &&
-		    !vos_is_ocb_per_pkt_tx_comp_msg_needed())
+		    !vos_is_ocb_tx_per_pkt_stats_enabled())
 			param |= HI_ACS_FLAGS_SDIO_REDUCE_TX_COMPL_SET;
 
 		/* enable TX completion to collect tx_desc for pktlog */

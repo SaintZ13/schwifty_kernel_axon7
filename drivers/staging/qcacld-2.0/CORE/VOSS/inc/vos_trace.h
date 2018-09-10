@@ -108,7 +108,6 @@ typedef enum
 
 #else
 #define MTRACE(p) {  }
-#define CASE_RETURN_STRING( str ) { }
 
 #endif
 

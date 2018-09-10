@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -245,6 +245,17 @@ static const hdd_freq_chan_map_t freq_chan_map[] = { {2412, 1}, {2417, 2},
 
 #define WE_SET_MODULATED_DTIM                 88
 
+#define WE_SET_MON_FILTER                     89
+typedef enum eMonFilterType{
+        MON_MGMT_PKT,
+        MON_CTRL_PKT,
+        MON_DATA_PKT,
+        MON_ALL_PKT,
+} tMonFilterType;
+
+#define WE_SET_TDLS_OFFCHANNEL_MODE           90
+#define WE_SET_TDLS_OFFCHANNEL                91
+#define WE_SET_TDLS_OFFCHANNEL_SEC_OFFSET     92
 
 /* Private ioctls and their sub-ioctls */
 #define WLAN_PRIV_SET_NONE_GET_INT    (SIOCIWFIRSTPRIV + 1)
@@ -369,33 +380,33 @@ static const hdd_freq_chan_map_t freq_chan_map[] = { {2412, 1}, {2417, 2},
 
 /* Private ioctls and their sub-ioctls */
 #define WLAN_PRIV_SET_VAR_INT_GET_NONE   (SIOCIWFIRSTPRIV + 7)
-#define WE_LOG_DUMP_CMD      1
+#define WE_LOG_DUMP_CMD                              1
 
-#define WE_P2P_NOA_CMD       2
+#define WE_P2P_NOA_CMD                               2
 //IOCTL to configure MCC params
-#define WE_MCC_CONFIG_CREDENTIAL 3
-#define WE_MCC_CONFIG_PARAMS  4
+#define WE_MCC_CONFIG_CREDENTIAL                     3
+#define WE_MCC_CONFIG_PARAMS                         4
 
 #ifdef FEATURE_WLAN_TDLS
-#define WE_TDLS_CONFIG_PARAMS   5
+#define WE_TDLS_CONFIG_PARAMS                        5
 #endif
-#define WE_IBSS_GET_PEER_INFO   6
-#define WE_UNIT_TEST_CMD   7
+#define WE_IBSS_GET_PEER_INFO                        6
+#define WE_UNIT_TEST_CMD                             7
 
-#define WE_MTRACE_DUMP_CMD    8
+#define WE_MTRACE_DUMP_CMD                           8
 #define WE_MTRACE_SELECTIVE_MODULE_LOG_ENABLE_CMD    9
 
 #ifdef WLAN_FEATURE_GPIO_LED_FLASHING
-#define WE_LED_FLASHING_PARAM    10
+#define WE_LED_FLASHING_PARAM                       10
 #endif
 #ifdef MEMORY_DEBUG
-#define WE_MEM_TRACE_DUMP     11
+#define WE_MEM_TRACE_DUMP                           11
 #endif
 #ifdef FEATURE_WLAN_TDLS
 #undef  MAX_VAR_ARGS
-#define MAX_VAR_ARGS         11
+#define MAX_VAR_ARGS                                11
 #else
-#define MAX_VAR_ARGS         7
+#define MAX_VAR_ARGS                                 7
 #endif
 
 /* Private ioctls (with no sub-ioctls) */
@@ -697,6 +708,48 @@ int hdd_priv_get_data(struct iw_point *p_priv_data,
    return 0;
 }
 
+#define WLAN_HDD_MAX_BW_VALUE	5
+
+/**
+ * wlan_hdd_validate_mon_channel() - check channel number is valid or not
+ * @channel: channel number
+ *
+ * @return: VOS_STATUS
+ */
+VOS_STATUS wlan_hdd_validate_mon_channel(int channel)
+{
+        uint8_t fValidChannel = FALSE, count = 0;
+
+        for (count = RF_CHAN_1; count <= RF_CHAN_165; count++)
+        {
+            if ( channel == rfChannels[count].channelNum )
+            {
+                fValidChannel = TRUE;
+                break;
+            }
+        }
+        if (fValidChannel != TRUE)
+        {
+            hddLog(VOS_TRACE_LEVEL_ERROR,
+                "%s: Invalid Channel [%d]", __func__, channel);
+            return VOS_STATUS_E_FAILURE;
+        }
+        return VOS_STATUS_SUCCESS;
+}
+
+/**
+ * wlan_hdd_validate_mon_bw() - check bandwidth value is valid or not
+ * @bw: bandwidth value
+ *
+ * @return: VOS_STATUS
+ */
+VOS_STATUS wlan_hdd_validate_mon_bw(int bw)
+{
+        if (bw >= 0 && bw <= WLAN_HDD_MAX_BW_VALUE)
+            return VOS_STATUS_SUCCESS;
+
+        return VOS_STATUS_E_FAILURE;
+}
 
 /**---------------------------------------------------------------------------
 
@@ -2128,8 +2181,13 @@ __iw_get_mode(struct net_device *dev, struct iw_request_info *info,
 
     switch (pWextState->roamProfile.BSSType) {
     case eCSR_BSS_TYPE_INFRASTRUCTURE:
-        hddLog(LOG1, FL("returns IW_MODE_INFRA"));
-        wrqu->mode = IW_MODE_INFRA;
+        if(VOS_MONITOR_MODE == vos_get_conparam()){
+            hddLog(LOG1, FL("returns IW_MODE_MONITOR"));
+            wrqu->mode = IW_MODE_MONITOR;
+        }else{
+            hddLog(LOG1, FL("returns IW_MODE_INFRA"));
+            wrqu->mode = IW_MODE_INFRA;
+        }
         break;
     case eCSR_BSS_TYPE_IBSS:
     case eCSR_BSS_TYPE_START_IBSS:
@@ -5955,6 +6013,51 @@ VOS_STATUS wlan_hdd_get_temperature(hdd_adapter_t *pAdapter,
     return VOS_STATUS_SUCCESS;
 }
 
+/**
+ * wlan_hdd_mnt_filter_type_cmd() - set filter packet type
+ * configuration to firmware
+ * @data: pointer to filter type configuration data.
+ * @data_len: the length in byte of filter type data.
+ *
+ * This is called when wlan driver needs to set
+ * filter packet type to firmware in monitor mode.
+ *
+ * Return: An error code or 0 on success.
+ */
+static int wlan_hdd_mnt_filter_type_cmd(hdd_adapter_t *pAdapter, v_U8_t *data,
+                                        int data_len)
+{
+    hdd_context_t *pHddCtx = NULL;
+    v_CONTEXT_t pVosContext = NULL;
+    struct sme_mnt_filter_type_req  filter_type;
+    VOS_STATUS status;
+    int ret_val = -EIO;
+
+    /* Get the Global VOSS Context */
+    pVosContext = vos_get_global_context(VOS_MODULE_ID_SYS, NULL);
+    if (!pVosContext) {
+        hddLog(VOS_TRACE_LEVEL_FATAL,"%s: VOS context is Null", __func__);
+        return ret_val;
+    }
+
+    /* Get the HDD context */
+    pHddCtx = (hdd_context_t *)vos_get_context(VOS_MODULE_ID_HDD, pVosContext);
+    if (!pHddCtx) {
+        hddLog(VOS_TRACE_LEVEL_FATAL,"%s: HDD context is Null",__func__);
+        return ret_val;
+    }
+
+    filter_type.vdev_id = pAdapter->sessionId;
+    filter_type.request_data_len = data_len;
+    filter_type.request_data = data;
+
+    status = sme_mnt_filter_type_cmd(&filter_type);
+    if (VOS_STATUS_SUCCESS == status) {
+        ret_val = 0;
+    }
+    return ret_val;
+}
+
 /* set param sub-ioctls */
 static int __iw_setint_getnone(struct net_device *dev,
                                struct iw_request_info *info,
@@ -7273,11 +7376,68 @@ static int __iw_setint_getnone(struct net_device *dev,
             }
             break;
         }
+        case WE_SET_MON_FILTER:
+        {
+            v_U8_t filter_type = 0;
+
+            if (VOS_MONITOR_MODE != hdd_get_conparam()) {
+                hddLog(LOGE, "Unable to set Monitor Mode Filters");
+                hddLog(LOGE, "WLAN Device is not in Monitor mode!!");
+                return -EINVAL;
+            }
+
+            if (set_value < MON_MGMT_PKT || set_value > MON_ALL_PKT) {
+                hddLog(LOGE, "Invalid Filter value recieved...");
+                hddLog(LOGE, "Valid Values to set monitor mode filter:");
+                hddLog(LOGE, "0: Filter management packets");
+                hddLog(LOGE, "1: Filter control packets");
+                hddLog(LOGE, "2: Filter data packets");
+                hddLog(LOGE, "3: Filter All packets");
+                return -EINVAL;
+            }
+            filter_type = (v_U8_t) (set_value & 0xFF);
+
+            /* filter packetin monitor mode. */
+            if (filter_type < MON_MGMT_PKT || filter_type > MON_ALL_PKT) {
+                hddLog(LOGE, "Invalid monitor mode filter type received");
+                return -EINVAL;
+            }
+
+            hddLog(LOG1, "Monitor Mode Filter type  = %d", filter_type);
+            wlan_hdd_mnt_filter_type_cmd(pAdapter, &filter_type,sizeof(v_U8_t));
+            break;
+        }
+        case WE_SET_TDLS_OFFCHANNEL_MODE:
+        {
+            hddLog(LOG1, "SET tdls_offchannel_mode  val %d", set_value);
+            ret = hdd_set_tdls_offchannelmode(pAdapter, set_value);
+            break;
+        }
+        case WE_SET_TDLS_OFFCHANNEL:
+        {
+            hddLog(LOG1, "SET tdls_offchannel val %d", set_value);
+
+            if (VOS_IS_DFS_CH(set_value)) {
+                hddLog(LOGE,
+                      FL("DFS channel %d is passed for hdd_set_tdls_offchannel"),
+                      set_value);
+                ret = -EINVAL;
+                break;
+            }
+            ret = hdd_set_tdls_offchannel(pHddCtx, set_value);
+            break;
+        }
+	case WE_SET_TDLS_OFFCHANNEL_SEC_OFFSET:
+        {
+            hddLog(LOG1, "SET tdls_offchannel_mode  val %d", set_value);
+            ret = hdd_set_tdls_secoffchanneloffset(pHddCtx, set_value);
+	    break;
+	}
         default:
         {
-           hddLog(LOGE, "%s: Invalid sub command %d", __func__, sub_cmd);
-           ret = -EINVAL;
-           break;
+            hddLog(LOGE, "%s: Invalid sub command %d", __func__, sub_cmd);
+            ret = -EINVAL;
+            break;
         }
     }
     EXIT();
@@ -8157,7 +8317,6 @@ static int __iw_get_char_setnone(struct net_device *dev,
    *And currently it only checks P2P_CLIENT adapter.
    *P2P_DEVICE and P2P_GO have not been added as of now.
 */
-#ifdef TRACE_RECORD
         case WE_GET_STATES:
         {
             int buf = 0, len = 0;
@@ -8290,7 +8449,6 @@ static int __iw_get_char_setnone(struct net_device *dev,
             wrqu->data.length = strlen(extra)+1;
             break;
         }
-#endif
 
         case WE_GET_CFG:
         {
@@ -9739,11 +9897,14 @@ static int __iw_set_host_offload(struct net_device *dev,
         }
     }
 
-    /* Execute offload request. The reason that we can copy the request information
-       from the ioctl structure to the SME structure is that they are laid out
-       exactly the same.  Otherwise, each piece of information would have to be
-       copied individually. */
-    memcpy(&offloadRequest, pRequest, wrqu->data.length);
+    vos_mem_zero(&offloadRequest, sizeof(offloadRequest));
+    offloadRequest.offloadType = pRequest->offloadType;
+    offloadRequest.enableOrDisable = pRequest->enableOrDisable;
+    vos_mem_copy(&offloadRequest.params, &pRequest->params,
+                 sizeof(pRequest->params));
+    vos_mem_copy(&offloadRequest.bssId, &pRequest->bssId.bytes,
+                 VOS_MAC_ADDRESS_LEN);
+
     if (eHAL_STATUS_SUCCESS != sme_SetHostOffload(WLAN_HDD_GET_HAL_CTX(pAdapter),
                                         pAdapter->sessionId, &offloadRequest))
     {
@@ -11344,6 +11505,18 @@ static int __iw_set_two_ints_getnone(struct net_device *dev,
             uint8_t ini_sub_20_ch_width =
                         hdd_ctx->cfg_ini->sub_20_channel_width;
 
+            /* Validate channel Number*/
+            if (wlan_hdd_validate_mon_channel(value[1]) != VOS_STATUS_SUCCESS) {
+                hddLog(LOGE, "Invalid channel for monitor mode");
+                return -EINVAL;
+            }
+
+            /* Validate bandwidth Number*/
+            if (wlan_hdd_validate_mon_bw(value[2]) != VOS_STATUS_SUCCESS) {
+                hddLog(LOGE, "Invalid bandwidth for monitor mode");
+                return -EINVAL;
+            }
+
             roam_profile = vos_mem_malloc(sizeof(tCsrRoamProfile));
             if (roam_profile == NULL){
                 hddLog(LOGE, "Failed to allocate memory");
@@ -11367,6 +11540,7 @@ static int __iw_set_two_ints_getnone(struct net_device *dev,
             hddLog(LOGE, "Set monitor mode Channel %d bandwidth %d sub20 %d",
                    value[1], vht_channel_width,
                    roam_profile->sub20_channelwidth);
+
             hdd_select_mon_cbmode(pAdapter, value[1], &vht_channel_width);
 
             roam_profile->ChannelInfo.ChannelList = &ch_info->channel;
@@ -11963,6 +12137,28 @@ static const struct iw_priv_args we_private_args[] = {
     {   WE_SET_MODULATED_DTIM,
         IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
         0, "setModDTIM" },
+
+    {
+        WE_SET_MON_FILTER,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0, "setMonFilter" },
+#ifdef FEATURE_WLAN_TDLS
+    {
+        WE_SET_TDLS_OFFCHANNEL_MODE,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "tdlsoffchnmode" },
+    {
+        WE_SET_TDLS_OFFCHANNEL,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "tdlsoffchan" },
+    {
+        WE_SET_TDLS_OFFCHANNEL_SEC_OFFSET,
+        IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+        0,
+        "tdlsecchnoffst" },
+#endif
 
     /* handlers for sub-ioctl */
     {   WE_GET_11D_STATE,
