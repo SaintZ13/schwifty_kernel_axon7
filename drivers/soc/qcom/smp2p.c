@@ -72,7 +72,7 @@ struct smp2p_out_list_item {
 static struct smp2p_out_list_item out_list[SMP2P_NUM_PROCS];
 
 static void *log_ctx;
-static int smp2p_debug_mask = 0;
+static int smp2p_debug_mask = MSM_SMP2P_INFO | MSM_SMP2P_DEBUG;
 module_param_named(debug_mask, smp2p_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 
@@ -416,10 +416,8 @@ static void *smp2p_get_remote_smem_item(int remote_pid,
 		if (smem_id >= 0)
 			item_ptr = smem_get_entry(smem_id, &size,
 								remote_pid, 0);
-	#ifdef CONFIG_MSM_SMP2P_TEST
 	} else if (remote_pid == SMP2P_REMOTE_MOCK_PROC) {
 		item_ptr = msm_smp2p_get_remote_mock_smem_item(&size);
-#endif
 	}
 	item_ptr = out_item->ops_ptr->validate_size(remote_pid, item_ptr, size);
 
@@ -1597,10 +1595,8 @@ static void smp2p_send_interrupt(int remote_pid)
 		wmb();
 		writel_relaxed(smp2p_int_cfgs[remote_pid].out_int_mask,
 			smp2p_int_cfgs[remote_pid].out_int_ptr);
-	#ifdef CONFIG_MSM_SMP2P_TEST
 	} else {
 		smp2p_remote_mock_rx_interrupt();
-#endif
 	}
 }
 

@@ -518,7 +518,7 @@ static ssize_t set_debug_mask(struct device *dev,
 		if (msm_uport->ipc_debug_mask < FATAL_LEV ||
 				msm_uport->ipc_debug_mask > DBG_LEV) {
 			/* set to default level */
-			msm_uport->ipc_debug_mask = DBG_LEV;
+			msm_uport->ipc_debug_mask = INFO_LEV;
 			MSM_HS_ERR("Range is 0 to 4;Set to default level 3\n");
 			return -EINVAL;
 		}

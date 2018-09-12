@@ -315,7 +315,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	if (error) {
 		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
 		last_dev %= REC_FAILED_NUM;
-		//printk(KERN_ERR "PM: late suspend of devices failed\n");
+		printk(KERN_ERR "PM: late suspend of devices failed\n");
 		log_suspend_abort_reason("%s device failed to power down",
 			suspend_stats.failed_devs[last_dev]);
 		goto Platform_finish;
@@ -328,7 +328,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	if (error) {
 		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
 		last_dev %= REC_FAILED_NUM;
-		//printk(KERN_ERR "PM: noirq suspend of devices failed\n");
+		printk(KERN_ERR "PM: noirq suspend of devices failed\n");
 		log_suspend_abort_reason("noirq suspend of %s device failed",
 			suspend_stats.failed_devs[last_dev]);
 		goto Platform_early_resume;
@@ -496,15 +496,13 @@ static int enter_state(suspend_state_t state)
 	if (state == PM_SUSPEND_FREEZE)
 		freeze_begin();
 
-#ifdef CONFIG_PM_SYNC_BEFORE_SUSPEND
 	trace_suspend_resume(TPS("sync_filesystems"), 0, true);
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
 	trace_suspend_resume(TPS("sync_filesystems"), 0, false);
-#endif
 
-	//pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
+	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare(state);
 	if (error)
 		goto Unlock;
@@ -513,20 +511,19 @@ static int enter_state(suspend_state_t state)
 		goto Finish;
 
 	trace_suspend_resume(TPS("suspend_enter"), state, false);
-	//pr_debug("PM: Entering %s sleep\n", pm_states[state]);
+	pr_debug("PM: Entering %s sleep\n", pm_states[state]);
 	pm_restrict_gfp_mask();
 	error = suspend_devices_and_enter(state);
 	pm_restore_gfp_mask();
 
  Finish:
-	//pr_debug("PM: Finishing wakeup.\n");
+	pr_debug("PM: Finishing wakeup.\n");
 	suspend_finish();
  Unlock:
 	mutex_unlock(&pm_mutex);
 	return error;
 }
 
-#if 0
 static void pm_suspend_marker(char *annotation)
 {
 	struct timespec ts;
@@ -538,11 +535,6 @@ static void pm_suspend_marker(char *annotation)
 		annotation, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
 }
-#else
-static inline void pm_suspend_marker(char *annotation)
-{
-}
-#endif
 
 /**
  * pm_suspend - Externally visible function for suspending the system.

@@ -21,7 +21,7 @@
 	interrupt-parent = <&intc>;
 
 	chosen {
-		bootargs = "sched_enable_hmp=1 app_setting.use_32bit_app_setting=0 kpti=1";
+		bootargs = "sched_enable_hmp=1 sched_enable_power_aware=1 app_setting.use_32bit_app_setting=1 kpti=1";
 	};
 
 	aliases {
@@ -165,9 +165,9 @@
 				compatible = "android,fstab";
 				vendor {
 					compatible = "android,vendor";
-					dev = "/dev/block/platform/soc/624000.ufshc/by-name/vendor";
+					dev = "/dev/block/platform/soc/7464900.sdhci/by-name/vendor";
 					type = "ext4";
-					mnt_flags = "ro,barrier=1,noatime";
+					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait";
 					status = "ok";
 				 };
@@ -175,7 +175,7 @@
 					compatible = "android,system";
 					dev = "/dev/block/platform/soc/7464900.sdhci/by-name/system";
 					type = "ext4";
-					mnt_flags = "ro,barrier=1,noatime";
+					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait";
 					status = "ok";
 				};
@@ -2903,12 +2903,6 @@
 			qcom,levels = <576000 600000 600000>;
 			qcom,freq-req;
 		};
-	};
-        
-        qcom,msm-thermal-simple {
-		compatible = "qcom,msm-thermal-simple";
-		qcom,thermal-vadc = <&pm8994_vadc>;
-		qcom,adc-channel = <117>; /* LR_MUX6_PU1_AMUX_THM3 */
 	};
 
 	qcom,bcl {

@@ -344,8 +344,7 @@ SYSCALL_DEFINE4(sync_file_range, int, fd, loff_t, offset, loff_t, nbytes,
 	}
 
 	if (flags & SYNC_FILE_RANGE_WRITE) {
-		ret = __filemap_fdatawrite_range(mapping, offset, endbyte,
-                                                WB_SYNC_NONE);
+		ret = filemap_fdatawrite_range(mapping, offset, endbyte);
 		if (ret < 0)
 			goto out_put;
 	}

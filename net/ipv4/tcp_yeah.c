@@ -15,7 +15,7 @@
 
 #include "tcp_vegas.h"
 
-#define TCP_YEAH_ALPHA       75 /* number of packets queued at the bottleneck */
+#define TCP_YEAH_ALPHA       80 /* number of packets queued at the bottleneck */
 #define TCP_YEAH_GAMMA        1 /* fraction of queue to be removed per rtt */
 #define TCP_YEAH_DELTA        3 /* log minimum fraction of cwnd to be removed on loss */
 #define TCP_YEAH_EPSILON      1 /* log maximum fraction to be removed on early decongestion */

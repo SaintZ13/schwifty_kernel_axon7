@@ -111,6 +111,11 @@ struct hrtimer {
 	enum hrtimer_restart		(*function)(struct hrtimer *);
 	struct hrtimer_clock_base	*base;
 	unsigned long			state;
+#ifdef CONFIG_TIMER_STATS
+	int				start_pid;
+	void				*start_site;
+	char				start_comm[16];
+#endif
 };
 
 /**

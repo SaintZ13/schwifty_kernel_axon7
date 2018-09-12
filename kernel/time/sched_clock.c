@@ -212,8 +212,8 @@ static int sched_clock_suspend(void)
 
 	suspend_ns = cd.epoch_ns;
 	suspend_cycles = cd.epoch_cyc;
-	//pr_info("suspend ns:%17llu	suspend cycles:%17llu\n",
-	//			cd.epoch_ns, cd.epoch_cyc);
+	pr_info("suspend ns:%17llu	suspend cycles:%17llu\n",
+				cd.epoch_ns, cd.epoch_cyc);
 	hrtimer_cancel(&sched_clock_timer);
 	cd.suspended = true;
 	return 0;
@@ -223,7 +223,7 @@ static void sched_clock_resume(void)
 {
 	cd.epoch_cyc = read_sched_clock();
 	resume_cycles = cd.epoch_cyc;
-	//pr_info("resume cycles:%17llu\n", cd.epoch_cyc);
+	pr_info("resume cycles:%17llu\n", cd.epoch_cyc);
 	hrtimer_start(&sched_clock_timer, cd.wrap_kt, HRTIMER_MODE_REL);
 	cd.suspended = false;
 }

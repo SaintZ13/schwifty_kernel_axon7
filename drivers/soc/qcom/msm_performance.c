@@ -413,7 +413,7 @@ static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
 	while ((cp = strpbrk(cp + 1, " :")))
 		ntokens++;
 
-	
+	/* CPU:value pair */
 	if (!(ntokens % 2))
 		return -EINVAL;
 
@@ -446,6 +446,13 @@ static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
 		cp++;
 	}
 
+	/*
+	 * Since on synchronous systems policy is shared amongst multiple
+	 * CPUs only one CPU needs to be updated for the limit to be
+	 * reflected for the entire cluster. We can avoid updating the policy
+	 * of other CPUs in the cluster once it is done for at least one CPU
+	 * in the cluster
+	 */
 	get_online_cpus();
 	for_each_cpu(i, limit_mask) {
 		i_cpu_stats = &per_cpu(cpu_stats, i);
@@ -463,6 +470,7 @@ static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
 	}
 	put_online_cpus();
 #endif
+
 	return 0;
 }
 

@@ -77,8 +77,8 @@
 		qcom,mdss-dsi-te-check-enable;
 		qcom,mdss-dsi-te-using-te-pin;
 		qcom,ulps-enabled;
-		qcom,panel-allow-phy-poweroff;
 		qcom,mdss-mdp-transfer-time-us = <12500>;
+		qcom,mdss-dsi-lp11-init;
 		qcom,mdss-dsi-bl-pmic-control-type ="bl_ctrl_dcs";
 		qcom,mdss-dsi-bl-min-level = <1>;
 		qcom,mdss-dsi-bl-max-level = <255>;
