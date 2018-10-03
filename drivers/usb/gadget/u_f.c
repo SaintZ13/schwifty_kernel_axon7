@@ -11,6 +11,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/usb/gadget.h>
 #include "u_f.h"
 #include <linux/usb/ch9.h>
 
