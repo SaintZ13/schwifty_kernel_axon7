@@ -732,7 +732,7 @@ static int cpufreq_interactive_speedchange_task(void *data)
 			if (ppol->target_freq != ppol->policy->cur)
 				__cpufreq_driver_target(ppol->policy,
 							ppol->target_freq,
-							CPUFREQ_RELATION_H);
+							CPUFREQ_RELATION_C);
 			trace_cpufreq_interactive_setspeed(cpu,
 						     ppol->target_freq,
 						     ppol->policy->cur);
