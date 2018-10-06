@@ -822,7 +822,6 @@ sg_common_write(Sg_fd * sfp, Sg_request * srp,
 			(int) cmnd[0], (int) hp->cmd_len));
 
 	if (hp->dxfer_len >= SZ_256M)
-	if (!sg_is_valid_dxfer(hp))
 		return -EINVAL;
 
 	k = sg_start_req(srp, cmnd);

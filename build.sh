@@ -1,12 +1,12 @@
-export KBUILD_BUILD_USER=SaintZ93
-export KBUILD_BUILD_HOST=hidden
+export KBUILD_BUILD_USER=Skrem339
+export KBUILD_BUILD_HOST=heh_i_wont_tell_you
 export ARCH=arm64
-export CROSS_COMPILE=$HOME/toolchain/bin/aarch64-zr3n1-linux-musleabi-
+export CROSS_COMPILE=/home/zr3n1/x-tools/aarch64-zr3n1-linux-musleabi/bin/aarch64-zr3n1-linux-musleabi-
 
 DIR=$(pwd)
 BUILD="$DIR/build"
 OUT="$DIR/out"
-NPR=`expr $(nproc) + 1`
+#NPR=`expr $(nproc) + 1`
 
 echo "cleaning build..."
 if [ -d "$BUILD" ]; then
@@ -21,7 +21,7 @@ mkdir "$BUILD"
 make O="$BUILD" schwifty_axon7_defconfig
 
 echo "building kernel..."
-make O="$BUILD" -j$NPR
+make O="$BUILD" -j30
 
 #echo "building modules..."
 #make O="$BUILD" INSTALL_MOD_PATH="." INSTALL_MOD_STRIP=1 modules_install

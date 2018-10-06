@@ -412,32 +412,23 @@ LINUXINCLUDE    := \
 
 KBUILD_CPPFLAGS := -D__KERNEL__ $(CLANG_FLAGS)
 
-
-##-mcpu=cortex-a57+crc+crypto+fp -mtune=cortex-a57 -g0 -O2 
-##                   -fbranch-target-load-optimize -fstdarg-opt -DNDEBUG 
-##                   -funswitch-loops -fpredictive-commoning -fgcse-after-reload 
-##                   -fno-aggressive-loop-optimizations 
-##                   -fno-delete-null-pointer-checks 
-##                   -fipa-sra -fmodulo-sched-allow-regmoves -fira-hoist-pressure -fira-loop-pressure \
-##                   -fgraphite -fgraphite-identity -floop-parallelize-all -fopenmp 
-## 		   -fno-delete-null-pointer-checks*/
-
-
 KBUILD_CFLAGS   := -Wno-error -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Wno-format-security -Wno-tautological-compare -Wno-packed-not-aligned \
-		   -mcpu=cortex-a57+crypto+crc -mtune=cortex-a57 \
+		   -mcpu=cortex-a57 -mtune=cortex-a57 \
  		   -fno-store-merging -fno-stack-check\
  		   -fbranch-target-load-optimize -fstdarg-opt -DNDEBUG -fpredictive-commoning -fgcse-after-reload \
  		   -fipa-sra -fmodulo-sched-allow-regmoves -fira-hoist-pressure -fira-loop-pressure -fgraphite -fgraphite-identity -floop-parallelize-all -fopenmp \
 		   -std=gnu89 -w -g0 -O2 -fdevirtualize-speculatively -fira-algorithm=CB -ftree-loop-distribution -fivopts -fsimd-cost-model=dynamic \
-		   -fdiagnostics-color=always \
+		   
+		  # -fdiagnostics-color=always \
 		   -Wno-maybe-uninitialized -Wno-unused-variable -Wno-unused-function -Wno-unused-label \
 		   -Wno-memset-transposed-args -Wno-bool-compare -Wno-logical-not-parentheses -Wno-discarded-array-qualifiers \
 		   -Wno-unused-const-variable -Wno-array-bounds -Wno-incompatible-pointer-types \
 		   -Wno-misleading-indentation -Wno-tautological-compare -Wno-error=misleading-indentation \
 		   -Wno-format-truncation -Wno-duplicate-decl-specifier -Wno-memset-elt-size -Wno-bool-operation \
 		   -Wno-int-in-bool-context -Wno-parentheses -Wno-switch-unreachable -Wno-stringop-overflow -Wno-format-overflow \
+		   
 		   
 LD		+= --strip-debug -O2
 

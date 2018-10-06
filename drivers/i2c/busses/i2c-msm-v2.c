@@ -77,6 +77,7 @@ const char *i2c_msm_err_str_table[] = {
 	[I2C_MSM_ERR_OVR_UNDR_RUN] = "OVER_UNDER_RUN_ERROR",
 };
 
+#if 0
 static void i2c_msm_dbg_dump_diag(struct i2c_msm_ctrl *ctrl,
 				bool use_param_vals, u32 status, u32 qup_op)
 {
@@ -115,6 +116,12 @@ static void i2c_msm_dbg_dump_diag(struct i2c_msm_ctrl *ctrl,
 		i2c_msm_mode_str_tbl[xfer->mode_id], xfer->msgs->addr,
 		status, qup_op);
 }
+#else
+static inline void i2c_msm_dbg_dump_diag(struct i2c_msm_ctrl *ctrl,
+				bool use_param_vals, u32 status, u32 qup_op)
+{
+}
+#endif
 
 static u32 i2c_msm_reg_io_modes_out_blk_sz(u32 qup_io_modes)
 {

@@ -9,6 +9,7 @@
 /* FIXME */
 #define ___PD(f) do { } while (0)
 
+#if 0
 static inline void print_irq_desc(unsigned int irq, struct irq_desc *desc)
 {
 	printk("irq %d, desc: %p, depth: %d, count: %d, unhandled: %d\n",
@@ -39,6 +40,11 @@ static inline void print_irq_desc(unsigned int irq, struct irq_desc *desc)
 	___PD(IRQS_DISABLED);
 	___PD(IRQS_MASKED);
 }
+#else
+static inline void print_irq_desc(unsigned int irq, struct irq_desc *desc)
+{
+}
+#endif
 
 #undef ___P
 #undef ___PS
