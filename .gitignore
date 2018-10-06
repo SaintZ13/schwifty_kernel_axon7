@@ -35,7 +35,6 @@
 modules.builtin
 Module.symvers
 *.dwo
-build.sh
 
 #
 # Top-level generic files
@@ -102,6 +101,8 @@ all.config
 build/
 out/
 prebuilts/
+build.sh
+changelog.sh
 
 # Linux Scripts
 bin/
