@@ -1853,7 +1853,7 @@ static int cnss_wlan_runtime_resume(struct device *dev)
 	if (wdrv && wdrv->runtime_ops && wdrv->runtime_ops->runtime_resume)
 		ret = wdrv->runtime_ops->runtime_resume(to_pci_dev(dev));
 
-	pr_info("cnss: runtime resume status: %d\n", ret);
+// 	pr_info("cnss: runtime resume status: %d\n", ret);
 
 	return ret;
 }
