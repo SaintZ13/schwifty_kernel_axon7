@@ -1,7 +1,7 @@
-export KBUILD_BUILD_USER=Skrem339
-export KBUILD_BUILD_HOST=heh_i_wont_tell_you
+export KBUILD_BUILD_USER=SaintZ93
+export KBUILD_BUILD_HOST=hidden
 export ARCH=arm64
-export CROSS_COMPILE=/home/zr3n1/x-tools/aarch64-zr3n1-linux-musleabi/bin/aarch64-zr3n1-linux-musleabi-
+export CROSS_COMPILE=$HOME/toolchain/bin/aarch64-zr3n1-linux-musleabi-
 
 DIR=$(pwd)
 BUILD="$DIR/build"
@@ -32,6 +32,6 @@ make O="$BUILD" -j30
 #mv "$BUILD/arch/arm64/boot/Image.gz-dtb" "$OUT/Image.gz-dtb"
 #find "$BUILD/lib/modules/" -name *.ko | xargs -n 1 -I '{}' mv {} "$OUT/modules"
 
-echo "Image.gz-dtb and modules can be found in $BUILD"
+echo "Image.gz-dtb can be found in $BUILD"
 
 
