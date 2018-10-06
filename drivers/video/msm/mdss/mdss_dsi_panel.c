@@ -1532,8 +1532,6 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		return -EINVAL;
 	}
 
-	display_on = true;
-
 	#ifdef CONFIG_POWERSUSPEND
 		set_power_suspend_state_panel_hook(POWER_SUSPEND_INACTIVE);
 	#endif
@@ -1669,8 +1667,6 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->off_cmds, CMD_REQ_COMMIT);
 
 	mdss_dsi_panel_off_hdmi(ctrl, pinfo);
-
-	display_on = false;
 
 	#ifdef CONFIG_POWERSUSPEND
 		set_power_suspend_state_panel_hook(POWER_SUSPEND_ACTIVE);
