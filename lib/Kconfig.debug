@@ -369,6 +369,7 @@ config MAGIC_SYSRQ_DEFAULT_ENABLE
 
 config DEBUG_KERNEL
 	bool "Kernel debugging"
+	default n
 	help
 	  Say Y here if you are developing drivers or trying to debug and
 	  identify kernel problems.

@@ -108,7 +108,7 @@ module_param_named(tag_tracking_passive, qtu_proc_handling_passive, bool,
 
 #define QTU_DEV_NAME "xt_qtaguid"
 
-uint qtaguid_debug_mask = DEFAULT_DEBUG_MASK;
+uint qtaguid_debug_mask = 0;
 module_param_named(debug_mask, qtaguid_debug_mask, uint, S_IRUGO | S_IWUSR);
 
 /*---------------------------------------------------------------------------*/
