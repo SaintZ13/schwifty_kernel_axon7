@@ -22,7 +22,7 @@
 
 #define dbg_inc(i) ((i+1) % DBG_MAX_MSG)
 
-#define ENABLE_EVENT_LOG 1
+#define ENABLE_EVENT_LOG 0
 unsigned int enable_event_log = ENABLE_EVENT_LOG;
 module_param(enable_event_log, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(enable_event_log, "enable event logging in debug buffer");

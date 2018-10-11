@@ -4824,7 +4824,7 @@ static int android_probe(struct platform_device *pdev)
 	list_add_tail(&android_dev->list_item, &android_dev_list);
 	android_dev_count++;
 
-	debug_debugfs_init();
+	//debug_debugfs_init();
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res) {
@@ -4885,7 +4885,7 @@ err_alloc:
 		class_destroy(android_class);
 		android_class = NULL;
 	}
-	debug_debugfs_exit();
+	//debug_debugfs_exit();
 err:
 	return ret;
 }
@@ -4907,7 +4907,7 @@ static int android_remove(struct platform_device *pdev)
 			break;
 	}
 
-	debug_debugfs_exit();
+	//debug_debugfs_exit();
 
 	if (dev) {
 		android_destroy_device(dev);

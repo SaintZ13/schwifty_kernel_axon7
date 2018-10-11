@@ -183,10 +183,10 @@ ol_rx_pn_check_base(
             if (TXRX_PN_CHECK_FAILURE_PRINT_PERIOD_MS <
                      (current_time_ms - last_pncheck_print_time)) {
                 last_pncheck_print_time = current_time_ms;
-                log_level = TXRX_PRINT_LEVEL_WARN;
+                log_level = 0;
             }
             else {
-                log_level = TXRX_PRINT_LEVEL_INFO2;
+                log_level = 0;
             }
 
             TXRX_PRINT(log_level,
