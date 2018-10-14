@@ -294,6 +294,16 @@ static const struct wiphy_wowlan_support wowlan_support_reg_init = {
     .pattern_min_len = WOW_MIN_PATTERN_SIZE,
     .pattern_max_len = WOW_MAX_PATTERN_SIZE,
 };
+
+static const struct cfg80211_wowlan wowlan_config = {
+	.any = true,
+	.disconnect = true,
+	.magic_pkt = true,
+	.gtk_rekey_failure = true,
+	.eap_identity_req = true,
+	.four_way_handshake = true,
+	.rfkill_release = true,
+};
 #endif
 
 /* Internal function declarations */
@@ -12771,6 +12781,13 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
 #ifdef WLAN_NS_OFFLOAD
          cancel_work_sync(&pAdapter->ipv6NotifierWorkQueue);
 #endif
+#ifdef FEATURE_WLAN_DISABLE_CHANNEL_SWITCH
+         /*
+          * If Do_Not_Break_Stream was enabled clear avoid channel list.
+          */
+         if (pHddCtx->restrict_offchan_flag)
+             wlan_hdd_send_avoid_freq_for_dnbs(pHddCtx, 0);
+#endif
          if (bCloseSession)
              hdd_wait_for_sme_close_sesion(pHddCtx, pAdapter);
          break;
@@ -14904,7 +14921,8 @@ void __hdd_wlan_exit(void)
    }
 
    /* module exit should never proceed if SSR is not completed */
-   while(pHddCtx->isLogpInProgress){
+   while (!vos_is_ssr_failed() &&
+          pHddCtx->isLogpInProgress){
       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
             "%s:SSR in Progress; block rmmod for 1 second!!!",
             __func__);
@@ -15340,6 +15358,7 @@ static VOS_STATUS wlan_hdd_reg_init(hdd_context_t *hdd_ctx)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)) || defined(WITH_BACKPORTS)
     wiphy->wowlan = &wowlan_support_reg_init;
+    wiphy->wowlan_config = kmemdup(&wowlan_config, sizeof(wowlan_config), GFP_KERNEL);
 #else
     wiphy->wowlan.flags = WIPHY_WOWLAN_ANY |
                           WIPHY_WOWLAN_MAGIC_PKT |
@@ -16126,17 +16145,21 @@ static int wlan_hdd_set_wow_pulse(hdd_context_t *phddctx, bool enable)
 				pcfg_ini->wow_pulse_interval_low;
 		wow_pulse_set_info.wow_pulse_interval_high=
 				pcfg_ini->wow_pulse_interval_high;
+		wow_pulse_set_info.wow_pulse_repeat_count=
+				pcfg_ini->wow_pulse_repeat_count;
 	} else {
 		wow_pulse_set_info.wow_pulse_enable = false;
 		wow_pulse_set_info.wow_pulse_pin = 0;
 		wow_pulse_set_info.wow_pulse_interval_low = 0;
 		wow_pulse_set_info.wow_pulse_interval_high= 0;
+		wow_pulse_set_info.wow_pulse_repeat_count= 0;
 	}
-	hddLog(LOG1,"%s: enable %d pin %d low %d high %d",
+	hddLog(LOG1,"%s: enable %d pin %d low %d high %d count = %d",
 		__func__, wow_pulse_set_info.wow_pulse_enable,
 		wow_pulse_set_info.wow_pulse_pin,
 		wow_pulse_set_info.wow_pulse_interval_low,
-		wow_pulse_set_info.wow_pulse_interval_high);
+		wow_pulse_set_info.wow_pulse_interval_high,
+		wow_pulse_set_info.wow_pulse_repeat_count);
 
 	status = sme_set_wow_pulse(&wow_pulse_set_info);
 	if (VOS_STATUS_E_FAILURE == status) {
@@ -16489,6 +16512,11 @@ VOS_STATUS hdd_mt_host_ev_cb(void *pcb_cxt, tSirMtEvent *pevent)
 		return VOS_STATUS_E_INVAL;
 
 	adapter = hdd_get_adapter_by_vdev(hddctx, pevent->vdev_id);
+	if (!adapter) {
+		hddLog(VOS_TRACE_LEVEL_ERROR,
+			FL("get adapter failed"));
+		return VOS_STATUS_E_INVAL;
+	}
 
 	hddLog(VOS_TRACE_LEVEL_INFO,
 		FL("hdd_mt_host_ev_cb vdev_id=%u, status=%u"),
@@ -16655,6 +16683,11 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    if (status != 0) {
        goto err_free_hdd_context;
    }
+
+#ifdef FEATURE_WLAN_DISABLE_CHANNEL_SWITCH
+   spin_lock_init(&pHddCtx->restrict_offchan_lock);
+   mutex_init(&pHddCtx->avoid_freq_lock);
+#endif
 
    spin_lock_init(&pHddCtx->dfs_lock);
    spin_lock_init(&pHddCtx->sap_update_info_lock);
@@ -17381,12 +17414,14 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    if(ptt_sock_activate_svc(pHddCtx) != 0)
    {
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: ptt_sock_activate_svc failed",__func__);
-      goto err_reg_netdev;
+      goto err_oem_activate_service;
    }
 #endif
 
-   if (hdd_open_cesium_nl_sock() < 0)
+   if (hdd_open_cesium_nl_sock() < 0) {
       hddLog(VOS_TRACE_LEVEL_WARN, FL("hdd_open_cesium_nl_sock failed"));
+      goto err_ptt_sock_activate_svc;
+   }
 
    //Initialize the CNSS-DIAG service
    if (cnss_diag_activate_service() < 0)
@@ -17397,13 +17432,7 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
    }
 
    hdd_register_mcast_bcast_filter(pHddCtx);
-   if (VOS_STA_SAP_MODE != hdd_get_conparam())
-   {
-      /* Action frame registered in one adapter which will
-       * applicable to all interfaces
-       */
-      wlan_hdd_cfg80211_register_frames(pAdapter);
-   }
+   wlan_hdd_cfg80211_register_frames(pAdapter);
 
    mutex_init(&pHddCtx->sap_lock);
 
@@ -17710,6 +17739,14 @@ int hdd_wlan_startup(struct device *dev, v_VOID_t *hif_sc)
 err_close_cesium:
    hdd_close_cesium_nl_sock();
 
+err_ptt_sock_activate_svc:
+#ifdef PTT_SOCK_SVC_ENABLE
+   ptt_sock_deactivate_svc();
+#endif
+err_oem_activate_service:
+#ifdef FEATURE_OEM_DATA_SUPPORT
+   oem_deactivate_service();
+#endif
 err_reg_netdev:
    if (rtnl_lock_enable == TRUE) {
       rtnl_lock_enable = FALSE;
@@ -18214,8 +18251,9 @@ static void hdd_driver_exit(void)
       vos_set_unload_in_progress(TRUE);
       rtnl_unlock();
 
-      while(pHddCtx->isLogpInProgress ||
-            vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL)) {
+      while (!vos_is_ssr_failed() &&
+             (pHddCtx->isLogpInProgress ||
+              vos_is_logp_in_progress(VOS_MODULE_ID_VOSS, NULL))) {
          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
               "%s:SSR in Progress; block rmmod for 1 second!!!", __func__);
          msleep(1000);
@@ -19456,6 +19494,7 @@ void wlan_hdd_send_svc_nlink_msg(int radio, int type, void *data, int len)
         case WLAN_SVC_LTE_COEX_IND:
         case WLAN_SVC_WLAN_AUTO_SHUTDOWN_IND:
         case WLAN_SVC_WLAN_AUTO_SHUTDOWN_CANCEL_IND:
+        case WLAN_SVC_SSR_FAIL_IND:
             ani_hdr->length = 0;
             nlh->nlmsg_len = NLMSG_LENGTH((sizeof(tAniMsgHdr)));
             break;

@@ -3674,6 +3674,7 @@ typedef struct sSirSmeAddStaSelfReq
     uint32_t        tx_non_aggr_sw_retry_threshhold_bk;
     uint32_t        tx_non_aggr_sw_retry_threshhold_vi;
     uint32_t        tx_non_aggr_sw_retry_threshhold_vo;
+    bool            enable_bcast_probe_rsp;
 }tSirSmeAddStaSelfReq, *tpSirSmeAddStaSelfReq;
 
 typedef struct sSirSmeDelStaSelfReq
@@ -7697,6 +7698,7 @@ struct udp_resp_offload {
  * @wow_pulse_pin: GPIO PIN for Pulse
  * @wow_pulse_interval_low: Pulse interval low
  * @wow_pulse_interval_high: Pulse interval high
+ * @wow_pulse_repeat_count: Pulse repeat count
  *
  * SME uses this structure to configure wow pulse info
  * and send it to WMA
@@ -7706,6 +7708,7 @@ struct wow_pulse_mode {
 	uint8_t                    wow_pulse_pin;
 	uint16_t                   wow_pulse_interval_high;
 	uint16_t                   wow_pulse_interval_low;
+	uint16_t                   wow_pulse_repeat_count;
 };
 
 /*
