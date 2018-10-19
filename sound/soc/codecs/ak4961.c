@@ -261,6 +261,7 @@ static u8	dac_status = 0;
 static struct snd_soc_codec *ak4961_codec; //lhs for ram codec write
 static int ak4961_band_mode = 0; /* 0 mean NB , 1 mean WB .*/
 static int ak4961_band_set = 0;  /*lhs*/
+static int ak4961_call_status = 0; /* 0 mean voice call 0ff , 1 mean voce call On .*/
 
 /* from 0dB ~ +20dB */
 static const u32 mic_gain_table[21] = {
@@ -2448,9 +2449,13 @@ static int akm_karaoke_mic_gain_set(struct snd_kcontrol *kcontrol,
 static const char *voice_band_switch_text[] = {
         "nb", "wb"
 };
- 
+
+static const char *voice_call_status_text[] = {"Off", "On"};
+
 static const struct soc_enum voice_band_switch_enum =
-                SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(voice_band_switch_text), voice_band_switch_text);
+		SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(voice_band_switch_text), voice_band_switch_text);
+static const struct soc_enum voice_call_status_enum =
+		SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(voice_call_status_text), voice_call_status_text);
 
 static int ak4961_bandswitch_get(struct snd_kcontrol *kcontrol,
         struct snd_ctl_elem_value *ucontrol)
@@ -2601,6 +2606,20 @@ static int ak4961_bandswitch_set(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 #endif
+
+static int ak4961_callstatus_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.enumerated.item[0] = ak4961_call_status;
+	return 0;
+}
+static int ak4961_callstatus_set(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	ak4961_call_status = ucontrol->value.integer.value[0];
+	pr_info("%s: ak4961_call_status=%d", __func__, ak4961_call_status);
+	return 0;
+}
 /*
  * Internal Rx Out Volume control:
  * from -18 to 0 dB in 3 dB steps
@@ -3147,6 +3166,8 @@ static const struct snd_kcontrol_new ak4961_snd_controls[] = {
 	 SOC_ENUM_EXT("Voice Band Switch", voice_band_switch_enum,
                         ak4961_bandswitch_get, ak4961_bandswitch_set),
 
+	 SOC_ENUM_EXT("Voice Call Status", voice_call_status_enum,
+			ak4961_callstatus_get, ak4961_callstatus_set),
 };
 
 /* virtual port entries */
@@ -6102,14 +6123,6 @@ static irqreturn_t ak4961_rce_irq(int irq, void *data)
 		}
 
 		if (mic_level < 0x03) { // ZTE_chenjun:orig:0x05
-			usleep_range(100*1000, 100*1000);
-			val = snd_soc_read(codec, JACK_DETECTION_STATUS);
-			if (val & 0x02)
-				dev_info(codec->dev, "%s: hp status is insertion (mic_level=%d)\n", __func__,mic_level);
-			else {
-				dev_info(codec->dev, "%s: hp status is removal (mic_level=%d)\n", __func__,mic_level);
-				return IRQ_HANDLED;
-			}
 #ifdef CONFIG_SWITCH
 			report = KEY_MEDIA;
 #else
@@ -6159,7 +6172,24 @@ static irqreturn_t ak4961_rce_irq(int irq, void *data)
 		if (report == KEY_VOLUMEDOWN) {
 			input_event(priv->mbhc_cfg.btn_idev, EV_MSC, MSC_SCAN, 0);
 		}
-
+		if ((report == KEY_MEDIA) && (ak4961_call_status == 1)) {
+			usleep_range(100*1000, 100*1000);
+			val = snd_soc_read(codec, JACK_DETECTION_STATUS);
+			if (val & 0x02) {
+				mic_level = snd_soc_read(codec, MIC_LEVEL_DETECTION);
+				if (mic_level >= 0x03) {
+					dev_info(codec->dev, "%s: hp status is insertion is hp jitter, ignore it's report.(mic_level=%d report=%d)\n",
+						__func__, mic_level, report);
+					return IRQ_HANDLED;
+				}
+				dev_info(codec->dev, "%s: hp status is insertion (mic_level=%d  report=%d)\n", __func__,
+					mic_level, report);
+			} else {
+				dev_info(codec->dev, "%s: hp status is removal ,ignore it's report.(mic_level=%d  report=%d)\n",
+					__func__, mic_level, report);
+				return IRQ_HANDLED;
+			}
+		}
 //ZTE_weizj 20150601 fix:Fake button press while inserting headset
 #if 1
 		if (report==226 && priv->mbhc_cfg.reject_btn) {
