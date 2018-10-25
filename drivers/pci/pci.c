@@ -524,11 +524,6 @@ static inline int platform_pci_run_wake(struct pci_dev *dev, bool enable)
 			pci_platform_pm->run_wake(dev, enable) : -ENODEV;
 }
 
-static inline bool platform_pci_need_resume(struct pci_dev *dev)
-{
-	return pci_platform_pm ? pci_platform_pm->need_resume(dev) : false;
-}
-
 /**
  * pci_raw_set_power_state - Use PCI PM registers to set the power state of
  *                           given PCI device
@@ -1029,12 +1024,12 @@ int pci_save_state(struct pci_dev *dev)
 EXPORT_SYMBOL(pci_save_state);
 
 static void pci_restore_config_dword(struct pci_dev *pdev, int offset,
-				     u32 saved_val, int retry, bool force)
+				     u32 saved_val, int retry)
 {
 	u32 val;
 
 	pci_read_config_dword(pdev, offset, &val);
-	if (!force && val == saved_val)
+	if (val == saved_val)
 		return;
 
 	for (;;) {
@@ -1053,36 +1048,25 @@ static void pci_restore_config_dword(struct pci_dev *pdev, int offset,
 }
 
 static void pci_restore_config_space_range(struct pci_dev *pdev,
-					   int start, int end, int retry,
-					   bool force)
+					   int start, int end, int retry)
 {
 	int index;
 
 	for (index = end; index >= start; index--)
 		pci_restore_config_dword(pdev, 4 * index,
 					 pdev->saved_config_space[index],
-					 retry, force);
+					 retry);
 }
 
 static void pci_restore_config_space(struct pci_dev *pdev)
 {
 	if (pdev->hdr_type == PCI_HEADER_TYPE_NORMAL) {
-		pci_restore_config_space_range(pdev, 10, 15, 0, false);
+		pci_restore_config_space_range(pdev, 10, 15, 0);
 		/* Restore BARs before the command register. */
-		pci_restore_config_space_range(pdev, 4, 9, 10, false);
-		pci_restore_config_space_range(pdev, 0, 3, 0, false);
-	} else if (pdev->hdr_type == PCI_HEADER_TYPE_BRIDGE) {
-		pci_restore_config_space_range(pdev, 12, 15, 0, false);
-
-		/*
-		 * Force rewriting of prefetch registers to avoid S3 resume
-		 * issues on Intel PCI bridges that occur when these
-		 * registers are not explicitly written.
-		 */
-		pci_restore_config_space_range(pdev, 9, 11, 0, true);
-		pci_restore_config_space_range(pdev, 0, 8, 0, false);
+		pci_restore_config_space_range(pdev, 4, 9, 0);
+		pci_restore_config_space_range(pdev, 0, 3, 0);
 	} else {
-		pci_restore_config_space_range(pdev, 0, 15, 0, false);
+		pci_restore_config_space_range(pdev, 0, 15, 0);
 	}
 }
 
@@ -1707,7 +1691,15 @@ static void pci_pme_list_scan(struct work_struct *work)
 	mutex_unlock(&pci_pme_list_mutex);
 }
 
-static void __pci_pme_active(struct pci_dev *dev, bool enable)
+/**
+ * pci_pme_active - enable or disable PCI device's PME# function
+ * @dev: PCI device to handle.
+ * @enable: 'true' to enable PME# generation; 'false' to disable it.
+ *
+ * The caller must verify that the device is capable of generating PME# before
+ * calling this function with @enable equal to 'true'.
+ */
+void pci_pme_active(struct pci_dev *dev, bool enable)
 {
 	u16 pmcsr;
 
@@ -1721,19 +1713,6 @@ static void __pci_pme_active(struct pci_dev *dev, bool enable)
 		pmcsr &= ~PCI_PM_CTRL_PME_ENABLE;
 
 	pci_write_config_word(dev, dev->pm_cap + PCI_PM_CTRL, pmcsr);
-}
-
-/**
- * pci_pme_active - enable or disable PCI device's PME# function
- * @dev: PCI device to handle.
- * @enable: 'true' to enable PME# generation; 'false' to disable it.
- *
- * The caller must verify that the device is capable of generating PME# before
- * calling this function with @enable equal to 'true'.
- */
-void pci_pme_active(struct pci_dev *dev, bool enable)
-{
-	__pci_pme_active(dev, enable);
 
 	/*
 	 * PCI (as opposed to PCIe) PME requires that the device have
@@ -2030,70 +2009,6 @@ bool pci_dev_run_wake(struct pci_dev *dev)
 	return false;
 }
 EXPORT_SYMBOL_GPL(pci_dev_run_wake);
-
-/**
- * pci_dev_keep_suspended - Check if the device can stay in the suspended state.
- * @pci_dev: Device to check.
- *
- * Return 'true' if the device is runtime-suspended, it doesn't have to be
- * reconfigured due to wakeup settings difference between system and runtime
- * suspend and the current power state of it is suitable for the upcoming
- * (system) transition.
- *
- * If the device is not configured for system wakeup, disable PME for it before
- * returning 'true' to prevent it from waking up the system unnecessarily.
- */
-bool pci_dev_keep_suspended(struct pci_dev *pci_dev)
-{
-	struct device *dev = &pci_dev->dev;
-
-	if (!pm_runtime_suspended(dev)
-	    || pci_target_state(pci_dev) != pci_dev->current_state
-	    || platform_pci_need_resume(pci_dev))
-		return false;
-
-	/*
-	 * At this point the device is good to go unless it's been configured
-	 * to generate PME at the runtime suspend time, but it is not supposed
-	 * to wake up the system.  In that case, simply disable PME for it
-	 * (it will have to be re-enabled on exit from system resume).
-	 *
-	 * If the device's power state is D3cold and the platform check above
-	 * hasn't triggered, the device's configuration is suitable and we don't
-	 * need to manipulate it at all.
-	 */
-	spin_lock_irq(&dev->power.lock);
-
-	if (pm_runtime_suspended(dev) && pci_dev->current_state < PCI_D3cold &&
-	    !device_may_wakeup(dev))
-		__pci_pme_active(pci_dev, false);
-
-	spin_unlock_irq(&dev->power.lock);
-	return true;
-}
-
-/**
- * pci_dev_complete_resume - Finalize resume from system sleep for a device.
- * @pci_dev: Device to handle.
- *
- * If the device is runtime suspended and wakeup-capable, enable PME for it as
- * it might have been disabled during the prepare phase of system suspend if
- * the device was not configured for system wakeup.
- */
-void pci_dev_complete_resume(struct pci_dev *pci_dev)
-{
-	struct device *dev = &pci_dev->dev;
-
-	if (!pci_dev_run_wake(pci_dev))
-		return;
-
-	spin_lock_irq(&dev->power.lock);
-
-	if (pm_runtime_suspended(dev) && pci_dev->current_state < PCI_D3cold)
-		__pci_pme_active(pci_dev, true);
-
-	spin_unlock_irq(&dev->power.lock);
-}
 
 void pci_config_pm_runtime_get(struct pci_dev *pdev)
 {
