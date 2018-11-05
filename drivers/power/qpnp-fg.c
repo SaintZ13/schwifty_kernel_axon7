@@ -649,6 +649,8 @@ struct fg_chip {
 	int			*batt_range_pct;
 };
 
+struct fg_chip *zte_fg_chip = NULL;
+
 /* FG_MEMIF DEBUGFS structures */
 #define ADDR_LEN	4	/* 3 byte address + 1 space character */
 #define CHARS_PER_ITEM	3	/* Format is 'XX ' */
@@ -9047,7 +9049,7 @@ static int fg_probe(struct spmi_device *spmi)
 		chip->revision[DIG_MAJOR], chip->revision[DIG_MINOR],
 		chip->revision[ANA_MAJOR], chip->revision[ANA_MINOR],
 		chip->pmic_subtype);
-
+	zte_fg_chip = chip;
 	return rc;
 
 power_supply_unregister:
