@@ -334,7 +334,7 @@
 			qcom,thermal-coefficients = [EC 85 75 4A FC 35];
 			qcom,fg-chg-iterm-ma = <150>;
 			qcom,cycle-counter-en;
-			qcom,capacity-learning-on;
+			/*qcom,capacity-learning-on; */
 			qcom,fg-cc-cv-threshold-mv = <4390>;
 			qcom,pmic-revid = <&pmi8994_revid>;
 			qcom,fg-cutoff-voltage-mv = <3400>;
