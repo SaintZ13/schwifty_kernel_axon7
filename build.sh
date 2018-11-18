@@ -1,5 +1,5 @@
-export KBUILD_BUILD_USER=Skrem339
-export KBUILD_BUILD_HOST=uber_pc
+export KBUILD_BUILD_USER=SaintZ93
+export KBUILD_BUILD_HOST=hidden
 export ARCH=arm64
 export CROSS_COMPILE=$HOME/toolchain/bin/aarch64-zr3n1-linux-musleabi-
 
@@ -18,7 +18,7 @@ fi
 
 echo "setting up build..."
 mkdir "$BUILD"
-make O="$BUILD" cad_axon7_defconfig
+make O="$BUILD" schwifty_axon7_defconfig
 
 echo "building kernel..."
 make O="$BUILD" -j30
@@ -32,6 +32,6 @@ mkdir -p $OUT/modules
 mv "$BUILD/arch/arm64/boot/Image.gz-dtb" "$OUT/Image.gz-dtb"
 find "$BUILD/lib/modules/" -name *.ko | xargs -n 1 -I '{}' mv {} "$OUT/modules"
 
-echo "Image.gz-dtb can be found in $BUILD"
+echo "Image.gz-dtb & modules can be found in $BUILD"
 
 

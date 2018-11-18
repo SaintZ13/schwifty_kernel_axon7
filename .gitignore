@@ -107,9 +107,9 @@ build.sh
 changelog.sh
 
 # Linux Scripts
-bin/
-os/
-snippets/
+/bin
+/os
+/snippets
 LICENSE
 README.md
 als
