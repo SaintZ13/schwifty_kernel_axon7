@@ -46,6 +46,8 @@ Module.symvers
 /vmlinuz
 /System.map
 /Module.markers
+/build
+build.sh
 
 #
 # Debian directory (make deb-pkg)

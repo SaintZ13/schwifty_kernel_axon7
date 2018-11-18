@@ -57,32 +57,6 @@ ifeq ($(KERNEL_BUILD), 0)
 	ifeq ($(CONFIG_ARCH_MSM8909), y)
 		ifeq ($(CONFIG_ROME_IF), sdio)
 			CONFIG_WLAN_SYNC_TSF_PLUS := y
-			CONFIG_FEATURE_COEX_PTA_CONFIG_ENABLE := y
-		endif
-	endif
-
-	# As per target team, build is done as follows:
-	# Defconfig : build with default flags
-	# Slub      : defconfig  + CONFIG_SLUB_DEBUG=y +
-	#             CONFIG_SLUB_DEBUG_ON=y + CONFIG_PAGE_POISONING=y
-	# Perf      : Using appropriate perf defconfig
-	#
-	# Shipment builds (user variants) should not have any debug feature
-	# enabled. This is identified using 'TARGET_BUILD_VARIANT'. Slub builds
-	# are identified using the CONFIG_SLUB_DEBUG_ON configuration. Since
-	# there is no other way to identify defconfig builds, QCOMs internal
-	# representation of perf builds (identified using the string 'perf'),
-	# is used to identify if the build is a slub or defconfig one. This
-	# way no critical debug feature will be enabled for perf and shipment
-	# builds. Other OEMs are also protected using the TARGET_BUILD_VARIANT
-	# config.
-	ifneq ($(TARGET_BUILD_VARIANT), user)
-		ifeq ($(CONFIG_SLUB_DEBUG_ON), y)
-			CONFIG_DPTRACE_ENABLE := y
-		else
-			ifeq ($(findstring perf,$(KERNEL_DEFCONFIG)),)
-				CONFIG_DPTRACE_ENABLE := y
-			endif
 		endif
 	endif
 
@@ -170,7 +144,7 @@ endif
 
 #Enable Power debugfs feature only if debug_fs is enabled
 ifeq ($(CONFIG_DEBUG_FS), y)
-CONFIG_WLAN_POWER_DEBUGFS := y
+CONFIG_WLAN_POWER_DEBUGFS := n
 endif
 
 ifdef CPTCFG_QCA_CLD_WLAN
@@ -198,7 +172,7 @@ BUILD_DEBUG_VERSION := 0
 BUILD_DIAG_VERSION := 1
 
 #Do we panic on bug?  default is to warn
-PANIC_ON_BUG := 1
+PANIC_ON_BUG := 0
 
 #Re-enable wifi on WDI timeout
 RE_ENABLE_WIFI_ON_WDI_TIMEOUT := 0
@@ -349,9 +323,6 @@ CONFIG_STATICALLY_ADD_11P_CHANNELS := n
 
 #Enable thermal shutdown
 CONFIG_WLAN_THERMAL_SHUTDOWN := 0
-
-#Enable the Disable Channel Switch
-CONFIG_WLAN_DISABLE_CHANNEL_SWITCH := 1
 
 ifeq ($(CONFIG_CFG80211),y)
 HAVE_CFG80211 := 1
@@ -1020,7 +991,6 @@ CDEFINES :=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DWLAN_PERF \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
-		-Werror\
 		-D__linux__ \
 		-DHAL_SELF_STA_PER_BSS=1 \
 		-DWLAN_FEATURE_VOWIFI_11R \
@@ -1274,8 +1244,8 @@ endif
 endif
 
 ifneq ($(TARGET_BUILD_VARIANT),user)
-CDEFINES += -DDEBUG_RX_RING_BUFFER
-CDEFINES += -DQCA_PKT_PROTO_TRACE
+#CDEFINES += -DDEBUG_RX_RING_BUFFER
+#CDEFINES += -DQCA_PKT_PROTO_TRACE
 endif
 
 # enable the MAC Address auto-generation feature
@@ -1654,7 +1624,6 @@ CDEFINES += -DACS_FW_REPORT_PARAM
 CDEFINES += -DFEATURE_WLAN_SUB_20_MHZ
 CDEFINES += -DMAC_NOTIFICATION_FEATURE
 CDEFINES += -DCHANNEL_HOPPING_ALL_BANDS
-CDEFINES += -DHDD_IPA_RX_SOFTIRQ_THRESH
 endif
 
 ifeq ($(CONFIG_ARCH_MSM8937), y)
@@ -1714,10 +1683,6 @@ CDEFINES += -DFEATURE_WLAN_THERMAL_SHUTDOWN
 CDEFINES += -DFEATURE_WLAN_AUTO_SHUTDOWN
 endif
 
-ifeq ($(CONFIG_WLAN_DISABLE_CHANNEL_SWITCH), 1)
-CDEFINES += -DFEATURE_WLAN_DISABLE_CHANNEL_SWITCH
-endif
-
 ifeq ($(CONFIG_WLAN_WAPI_MODE_11AC_DISABLE), y)
 CDEFINES += -DWLAN_WAPI_MODE_11AC_DISABLE
 endif
@@ -1727,6 +1692,12 @@ KBUILD_CPPFLAGS += $(CDEFINES)
 ifeq ($(call cc-option-yn, -Wheader-guard),y)
 EXTRA_CFLAGS += -Wheader-guard
 endif
+
+EXTRA_CFLAGS += $(call cc-disable-warning,maybe-uninitialized,)
+EXTRA_CFLAGS += $(call cc-disable-warning,unused-variable,)
+EXTRA_CFLAGS += $(call cc-disable-warning,unused-function,)
+EXTRA_CFLAGS += $(call cc-disable-warning,misleading-indentation,)
+EXTRA_CFLAGS += -Os
 
 # If the module name is not "wlan", then the define MULTI_IF_NAME to be the
 # same a the QCA CHIP name. The host driver will then append MULTI_IF_NAME to

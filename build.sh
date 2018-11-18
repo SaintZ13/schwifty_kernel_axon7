@@ -1,5 +1,5 @@
-export KBUILD_BUILD_USER=SaintZ93
-export KBUILD_BUILD_HOST=hidden
+export KBUILD_BUILD_USER=Skrem339
+export KBUILD_BUILD_HOST=uber_pc
 export ARCH=arm64
 export CROSS_COMPILE=$HOME/toolchain/bin/aarch64-zr3n1-linux-musleabi-
 
@@ -18,7 +18,7 @@ fi
 
 echo "setting up build..."
 mkdir "$BUILD"
-make O="$BUILD" schwifty_axon7_defconfig
+make O="$BUILD" cad_axon7_defconfig
 
 echo "building kernel..."
 make O="$BUILD" -j30

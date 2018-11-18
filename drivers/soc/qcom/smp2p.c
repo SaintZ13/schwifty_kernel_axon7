@@ -372,6 +372,7 @@ static void *smp2p_get_local_smem_item(int remote_pid)
 								remote_pid, 0);
 			}
 		}
+
 	} else if (remote_pid == SMP2P_REMOTE_MOCK_PROC) {
 		/*
 		 * This path is only used during unit testing so
@@ -1595,8 +1596,10 @@ static void smp2p_send_interrupt(int remote_pid)
 		wmb();
 		writel_relaxed(smp2p_int_cfgs[remote_pid].out_int_mask,
 			smp2p_int_cfgs[remote_pid].out_int_ptr);
+#ifdef CONFIG_MSM_SMP2P_TEST
 	} else {
 		smp2p_remote_mock_rx_interrupt();
+#endif
 	}
 }
 
