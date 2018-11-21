@@ -250,7 +250,6 @@ static int sdev_runtime_suspend(struct device *dev)
 	struct scsi_device *sdev = to_scsi_device(dev);
 	int err = 0;
 
-<<<<<<< HEAD
 	if (!sdev->request_queue->dev) {
 		err = scsi_dev_type_suspend(dev, do_scsi_runtime_suspend);
 		if (err == -EAGAIN)
