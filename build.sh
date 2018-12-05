@@ -18,7 +18,7 @@ fi
 
 echo "setting up build..."
 mkdir "$BUILD"
-make O="$BUILD" old_schwifty_axon7_defconfig
+make O="$BUILD" schwifty_axon7_defconfig
 
 echo "building kernel..."
 make O="$BUILD" -j30
