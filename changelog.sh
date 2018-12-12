@@ -24,7 +24,7 @@ blink=$(tput blink)             # blink
 # variables
 rdir=`pwd`
 CURRENT_DATE=`date +%Y%m%d`
-LAST_DATE=`date +%s -d "5 day ago"`
+LAST_DATE=`date +%s -d "35 day ago"`
 CUSTOM_DATE="$1"
 
 clear
@@ -39,7 +39,7 @@ echo -e "${txtrst}"
 echo -e "${blink}${bldblu} *** Generating Changelog ${txtrst}"; echo "";
 if [ -z "$CUSTOM_DATE" ]; then
     if [ -z "$LAST_DATE" ]; then
-        WORKING_DATE=`date +%s "1 day ago"`
+        WORKING_DATE=`date +%s "35 day ago"`
     else
         WORKING_DATE=${LAST_DATE}
     fi

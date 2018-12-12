@@ -835,7 +835,7 @@ static ssize_t mdss_fb_change_persist_mode(struct device *dev,
 	struct mdss_panel_info *pinfo = NULL;
 	struct mdss_panel_data *pdata;
 	int ret = 0;
-	u32 persist_mode;
+	unsigned int persist_mode;
 
 	if (!mfd || !mfd->panel_info) {
 		pr_err("%s: Panel info is NULL!\n", __func__);
@@ -858,8 +858,10 @@ static ssize_t mdss_fb_change_persist_mode(struct device *dev,
 	mutex_lock(&mfd->bl_lock);
 
 	pdata = dev_get_platdata(&mfd->pdev->dev);
-	if ((pdata) && (pdata->apply_display_setting))
+	/*if ((pdata) && (pdata->apply_display_setting))
 		ret = pdata->apply_display_setting(pdata, persist_mode);
+	else pr_err("could not apply");*/
+	pdata->vr_mode_enable(pdata, persist_mode);
 
 	mutex_unlock(&mfd->bl_lock);
 
