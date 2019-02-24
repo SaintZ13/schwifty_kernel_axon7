@@ -343,4 +343,4 @@ endif
 endef
 #
 ###############################################################################
-$(shell cd "$(srctree)" && ./scripts/fetch-latest-wireguard.sh)
+#$(shell cd "$(srctree)" && ./scripts/fetch-latest-wireguard.sh)
