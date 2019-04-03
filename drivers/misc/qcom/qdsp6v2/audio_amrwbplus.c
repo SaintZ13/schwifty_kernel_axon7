@@ -105,7 +105,7 @@ static long audio_ioctl_shared(struct file *file, unsigned int cmd,
 			audio->ac->session,
 			audio->enabled);
 		if (audio->stopped == 1)
-			audio->stopped = 0;
+		audio->stopped = 0;
 			break;
 		}
 	default:
