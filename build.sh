@@ -19,7 +19,7 @@ fi
 
 echo "setting up build..."
 mkdir "$BUILD"
-make O="$BUILD" lineageos_axon7_defconfig
+make O="$BUILD" schwifty_axon7_defconfig
 
 echo "building kernel..."
 make O="$BUILD" -j8
