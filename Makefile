@@ -771,6 +771,15 @@ KBUILD_CFLAGS += $(call cc-disable-warning, pointer-sign)
 # disable stringop warnings in gcc 8+
 KBUILD_CFLAGS += $(call cc-disable-warning, stringop-truncation)
 
+# disable address-of-packed-member warnings in gcc 9+
+KBUILD_CFLAGS += $(call cc-disable-warning, address-of-packed-member)
+
+# disable werror=array-bounds warnings in gcc 9+
+KBUILD_CFLAGS += $(call cc-disable-warning, array-bounds)
+
+# disable missing-attributes warnings in gcc 9+
+KBUILD_CFLAGS += $(call cc-disable-warning, missing-attributes)
+
 # disable invalid "can't wrap" optimizations for signed / pointers
 KBUILD_CFLAGS	+= $(call cc-option,-fno-strict-overflow)
 
